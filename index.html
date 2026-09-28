@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D House Planner CAD - Professional Architectural Drafting</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP TOOLBAR -->
+        <header class="top-navbar">
+            <div class="brand-section">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 2h7v3h-7V5zm-7 5h5v4H5v-4zm7 0h7v4h-7v-4zm-7 6h5v3H5v-3zm7 0h7v3h-7v-3z"/>
+                    </svg>
+                    <span>HousePlanner CAD</span>
+                </div>
+                <span class="badge-version">2D Arch v1.0</span>
+            </div>
+
+            <!-- Center Controls -->
+            <div class="navbar-center">
+                <button class="nav-btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+                <button class="nav-btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+                <button class="nav-btn" id="deleteBtn" title="Delete Selected (Del)">🗑 Delete</button>
+
+                <span style="color: var(--border-color);">|</span>
+
+                <!-- Units switcher -->
+                <button class="nav-btn active" id="unitToggleBtn" title="Switch between Imperial (Ft/In) and Metric (M)">Units: Imperial (Ft/In)</button>
+
+                <!-- Grid and Snapping -->
+                <button class="nav-btn active" id="snapGridBtn" title="Toggle Grid Snapping">🧲 Snap: ON</button>
+                <button class="nav-btn" id="orthoBtn" title="Ortho Mode: Lock 90° & 45° Angles (Hold Shift)">📐 Ortho: OFF</button>
+
+                <span style="color: var(--border-color);">|</span>
+
+                <!-- Zoom Controls -->
+                <button class="nav-btn" id="zoomOutBtn" title="Zoom Out (-)">−</button>
+                <button class="nav-btn" id="zoomInBtn" title="Zoom In (+)">+</button>
+                <button class="nav-btn" id="zoomFitBtn" title="Fit Drawing to Screen (0)">⊡ Fit</button>
+            </div>
+
+            <!-- Right Controls -->
+            <div class="navbar-right">
+                <!-- Sample Templates -->
+                <select class="nav-select" id="samplePlansSelect">
+                    <option value="">📂 Load Sample Plan...</option>
+                    <option value="30x40_duplex_g1" style="font-weight: bold; color: #38bdf8;">★ 30' × 40' G+1 Duplex (Side-by-Side Drafting)</option>
+                    <option value="30x40_2bhk">30' × 40' East-Facing 2BHK</option>
+                    <option value="40x60_villa">40' × 60' Luxury 3BHK Villa</option>
+                    <option value="20x30_1bhk">20' × 30' Compact 1BHK</option>
+                </select>
+
+                <!-- Export & Project Save -->
+                <button class="nav-btn" id="saveJsonBtn" title="Save Project as JSON">💾 Save</button>
+                <button class="nav-btn" id="loadJsonBtn" title="Open Project File">📂 Open</button>
+                <input type="file" id="loadJsonInput" accept=".json" style="display:none;">
+
+                <button class="nav-btn" id="exportPngBtn" title="Export High-Res PNG with Title Block">🖼 Export PNG</button>
+                <button class="nav-btn" id="exportPdfBtn" title="Export Architectural PDF (Print Ready A4/A3)">📕 PDF</button>
+                <button class="nav-btn" id="exportSvgBtn" title="Export Vector SVG">📐 SVG</button>
+                <button class="nav-btn" id="exportDxfBtn" title="Export AutoCAD DXF File">📄 DXF</button>
+
+                <button class="nav-btn" id="clearAllBtn" title="Clear Canvas" style="color:var(--accent-red);">✕ Clear</button>
+            </div>
+        </header>
+
+        <!-- MULTI-FLOOR CAD SWITCHER BAR -->
+        <div class="floor-nav-bar" id="floorNavBar">
+            <div class="floor-nav-left">
+                <span class="floor-nav-title">FLOOR:</span>
+                <button class="floor-tab-btn active" data-floor="ground" title="Ground Floor Plan (Hotkey: 1)">🏢 Ground Floor</button>
+                <button class="floor-tab-btn" data-floor="first" title="First Floor Plan (Hotkey: 2)">🏢 First Floor</button>
+                <button class="floor-tab-btn" data-floor="terrace" title="Terrace / Roof Plan (Hotkey: 3)">🏠 Terrace</button>
+                <button class="floor-tab-btn" data-floor="side_by_side" title="Side-by-Side Drafting Sheet (Hotkey: 0)">📑 Side-by-Side (Both Floors)</button>
+            </div>
+            <div class="floor-nav-right">
+                <button class="floor-action-btn" id="copyStructureBtn" title="Copy Structural RCC Columns & Exterior Perimeter Walls from Ground Floor to First Floor">📋 Copy Structure to First Floor</button>
+                <button class="floor-action-btn" id="ghostToggleBtn" title="Toggle faint Ground Floor ghost underlay when drafting First Floor">👻 Ghost Underlay: ON</button>
+                <button class="floor-action-btn" id="openProjectInfoModalBtn" title="Edit Professional CAD Title Block & Engineering Stamp Metadata">🏛 Title Block Stamp</button>
+            </div>
+        </div>
+
+        <!-- Tool Sub-options Bar (Dynamic when tool changes) -->
+        <div class="tool-sub-bar" id="toolSubBar"></div>
+
+        <!-- MAIN CAD WORKSPACE -->
+        <main class="workspace-main">
+            <!-- Left Tool Palette -->
+            <aside class="left-tool-palette">
+                <button class="tool-btn active" data-tool="select" data-tooltip="Select & Move (V / Esc)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M4 2l16 8.5-7.5 2.5-2.5 7.5L4 2z"/>
+                    </svg>
+                </button>
+
+                <div class="tool-divider"></div>
+
+                <button class="tool-btn" data-tool="plot_rect" data-tooltip="Site / Plot Boundary (P)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="4 2"/>
+                        <circle cx="3" cy="3" r="2" fill="currentColor"/>
+                        <circle cx="21" cy="3" r="2" fill="currentColor"/>
+                        <circle cx="21" cy="21" r="2" fill="currentColor"/>
+                        <circle cx="3" cy="21" r="2" fill="currentColor"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="wall" data-tooltip="Draw Wall (W)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M3 4h18v4H3V4zm0 6h8v4H3v-4zm10 0h8v4h-8v-4zm-10 6h18v4H3v-4z"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="compound_wall" data-tooltip="Compound Boundary Wall (K)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="6" width="20" height="12" rx="1"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="7" y1="6" x2="7" y2="12"/>
+                        <line x1="17" y1="6" x2="17" y2="12"/>
+                        <line x1="12" y1="12" x2="12" y2="18"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="column" data-tooltip="Place RCC Column (C)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="5" y="4" width="14" height="16" fill="currentColor" fill-opacity="0.2"/>
+                        <line x1="5" y1="4" x2="19" y2="20"/>
+                        <line x1="19" y1="4" x2="5" y2="20"/>
+                        <circle cx="7" cy="6" r="1" fill="currentColor"/>
+                        <circle cx="17" cy="6" r="1" fill="currentColor"/>
+                        <circle cx="7" cy="18" r="1" fill="currentColor"/>
+                        <circle cx="17" cy="18" r="1" fill="currentColor"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="door" data-tooltip="Place Door (D)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 20h16M4 4h8v16M4 4v16"/>
+                        <path d="M12 20a8 8 0 0 0 8-8" stroke-dasharray="2 2"/>
+                        <path d="M12 20l8-8"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="gate" data-tooltip="Place Entrance Gate (G)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="5" width="4" height="14" fill="currentColor"/>
+                        <rect x="18" y="5" width="4" height="14" fill="currentColor"/>
+                        <line x1="6" y1="8" x2="18" y2="8"/>
+                        <line x1="6" y1="12" x2="18" y2="12"/>
+                        <line x1="6" y1="16" x2="18" y2="16"/>
+                        <path d="M10 6l-2 6 2 6M14 6l2 6-2 6"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="window" data-tooltip="Place Window (N)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="5" width="18" height="14" rx="1"/>
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="room" data-tooltip="Room Label & Area (R)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16"/>
+                        <path d="M8 12h8M12 8v8"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="furniture" data-tooltip="Fixtures & Furniture (F)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="8" width="16" height="10" rx="2"/>
+                        <path d="M2 12v6M22 12v6M7 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="landscape" data-tooltip="Landscape & Site Greenery (L)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="10" r="7" fill="currentColor" fill-opacity="0.2"/>
+                        <path d="M12 17v5M9 22h6"/>
+                        <path d="M12 3a7 7 0 0 1 7 7c0 3.5-2.5 6-7 7-4.5-1-7-3.5-7-7a7 7 0 0 1 7-7z"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="dimension" data-tooltip="Dimension Measurement (M)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="6" x2="3" y2="18"/>
+                        <line x1="21" y1="6" x2="21" y2="18"/>
+                        <path d="M7 9l-4 3 4 3M17 9l4 3-4 3"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="break_wall" data-tooltip="Break / Split Wall (B)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="6" cy="6" r="3"/>
+                        <circle cx="6" cy="18" r="3"/>
+                        <line x1="20" y1="4" x2="8.12" y2="15.88"/>
+                        <line x1="14.47" y1="14.48" x2="20" y2="20"/>
+                        <line x1="8.12" y1="8.12" x2="12" y2="12"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="road" data-tooltip="Roads & Streets (O)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="4" y1="3" x2="4" y2="21"/>
+                        <line x1="20" y1="3" x2="20" y2="21"/>
+                        <line x1="12" y1="4" x2="12" y2="7" stroke-dasharray="2 2"/>
+                        <line x1="12" y1="10" x2="12" y2="13" stroke-dasharray="2 2"/>
+                        <line x1="12" y1="16" x2="12" y2="19" stroke-dasharray="2 2"/>
+                    </svg>
+                </button>
+
+                <button class="tool-btn" data-tool="stairs" data-tooltip="Stairs / Staircase (S)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 20h4v-4h4v-4h4V8h5"/>
+                        <path d="M3 20v-4h4v-4h4V8h4V4"/>
+                    </svg>
+                </button>
+
+                <div class="tool-divider"></div>
+
+                <button class="tool-btn" data-tool="pan" data-tooltip="Pan Canvas (Space + Drag)">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 11V6a2 2 0 0 0-4 0v4M14 10V4a2 2 0 0 0-4 0v7M10 10.5V6a2 2 0 0 0-4 0v8M6 14v-1.5a2 2 0 0 0-4 0V16a8 8 0 0 0 8 8h4a8 8 0 0 0 8-8v-3a2 2 0 0 0-4 0"/>
+                    </svg>
+                </button>
+            </aside>
+
+            <!-- Center Interactive CAD Canvas -->
+            <div class="canvas-viewport" id="canvasContainer">
+                <canvas id="cadCanvas"></canvas>
+            </div>
+
+            <!-- Right Inspector Sidebar -->
+            <aside class="right-sidebar">
+                <div class="inspector-header">
+                    <span>Properties Inspector</span>
+                </div>
+                <div class="inspector-body" id="inspectorBody">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+            </aside>
+        </main>
+
+        <!-- BOTTOM STATUS BAR -->
+        <footer class="bottom-status-bar">
+            <div class="status-left">
+                <span class="status-item" id="coordReadout">X: 0' - 0" | Y: 0' - 0"</span>
+                <span style="color: var(--border-color);">|</span>
+                <span class="status-item" id="scaleReadout">Zoom: 200%</span>
+                <span style="color: var(--border-color);">|</span>
+                <span class="status-pill" id="autosaveStatus" style="color:#22c55e; border-color:rgba(34,197,94,0.3); font-weight:600;">● Auto-save Active</span>
+            </div>
+            <div class="status-right">
+                <span class="status-pill">Drag: Move Wall/Corner</span>
+                <span class="status-pill">W: Wall</span>
+                <span class="status-pill">C: Column</span>
+                <span class="status-pill">D: Door</span>
+                <span class="status-pill">G: Gate</span>
+                <span class="status-pill">N: Window</span>
+                <span class="status-pill">S: Stairs</span>
+                <span class="status-pill">O: Road</span>
+                <span class="status-pill">R: Rotate</span>
+                <span class="status-pill">B: Break Wall</span>
+                <span class="status-pill">Shift: Ortho</span>
+                <span class="status-pill">Del: Remove</span>
+            </div>
+        </footer>
+        <!-- EXPORT PDF ARCHITECTURAL MODAL -->
+        <div class="modal-backdrop" id="exportPdfModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <span style="font-size:20px;">📕</span>
+                        <span>Export Architectural PDF</span>
+                    </div>
+                    <button class="modal-close-btn" id="closeExportPdfModal" title="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Sheet Paper Size</label>
+                        <select class="form-select" id="pdfPaperSizeSelect">
+                            <option value="a4" selected>A4 Landscape (297 × 210 mm) - Standard Office / Home Printing</option>
+                            <option value="a3">A3 Landscape (420 × 297 mm) - Architectural Ledger & Municipal Submission</option>
+                            <option value="a2">A2 Landscape (594 × 420 mm) - Large Format Blueprint</option>
+                            <option value="fit">Fit to Drawing - Custom Aspect Ratio</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Drawing Sheet Theme</label>
+                        <select class="form-select" id="pdfStyleSelect">
+                            <option value="clean" selected>Clean Architectural (Black & Slate on White - Recommended for PDF)</option>
+                            <option value="blueprint">Classic Blueprint (Technical Dark Blue Slate)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Drawing Title</label>
+                        <input type="text" class="form-input" id="pdfTitleInput" value="RESIDENTIAL BUILDING PLAN" placeholder="e.g. PROPOSED RESIDENTIAL BUILDING (G+1)">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Client / Project Reference</label>
+                        <input type="text" class="form-input" id="pdfClientInput" value="Custom Architectural Plan" placeholder="e.g. Sri. K. Ramesh & Family">
+                    </div>
+                    <div class="pdf-info-banner">
+                        <span>ℹ Ultra-sharp 300+ DPI print resolution with executive Title Block, North stamp, and scale bar.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancelExportPdfBtn">Cancel</button>
+                    <button class="btn btn-outline" id="printPdfPreviewBtn" title="Open Print Preview in Browser (Ctrl+P)">🖨 Print / Preview</button>
+                    <button class="btn btn-primary" id="confirmExportPdfBtn">⬇ Download PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROJECT TITLE BLOCK & ENGINEERING STAMP MODAL -->
+        <div class="modal-backdrop" id="projectInfoModal" style="display:none;">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <span style="font-size:20px;">🏛</span>
+                        <span>Project Title Block & Engineering Stamp</span>
+                    </div>
+                    <button class="modal-close-btn" id="closeProjectInfoModal" title="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Project Title</label>
+                        <input type="text" class="form-input" id="tbProjectTitle" value="PROPOSED RESIDENTIAL BUILDING (G+1)">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Drawing Sheet Title</label>
+                        <input type="text" class="form-input" id="tbDrawingTitle" value="GROUND & FIRST FLOOR WORKING ARCHITECTURAL DRAWINGS">
+                    </div>
+                    <div class="form-row" style="display:flex; gap:12px;">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Client Name</label>
+                            <input type="text" class="form-input" id="tbClientName" value="Sri. K. Ramesh & Family">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Site / Plot Details</label>
+                            <input type="text" class="form-input" id="tbSiteDetails" value="Plot #42, Royal Palms Layout, Bengaluru">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display:flex; gap:12px;">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Architect / Engineering Firm</label>
+                            <input type="text" class="form-input" id="tbArchitectFirm" value="Nirman Engineers & Architectural Studio">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Council Reg / License No.</label>
+                            <input type="text" class="form-input" id="tbEngineerRegNo" value="COA / BBMP Reg. #10482">
+                        </div>
+                    </div>
+                    <div class="form-row" style="display:flex; gap:12px;">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Drawing Number</label>
+                            <input type="text" class="form-input" id="tbDrawingNumber" value="DWG-01 / SHT 1">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Scale Notation</label>
+                            <input type="text" class="form-input" id="tbScaleText" value="1 : 100 / As Shown">
+                        </div>
+                    </div>
+                    <div class="pdf-info-banner">
+                        <span>ℹ This executive 4-column stamp is automatically rendered onto exported high-resolution PNG prints, PDFs, and drawing sheets.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancelProjectInfoBtn">Cancel</button>
+                    <button class="btn btn-primary" id="saveProjectInfoBtn">✔ Save Title Block</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Module Script -->
+        <script type="module" src="app.js"></script>
+    </body>
+</html>
