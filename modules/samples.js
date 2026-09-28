@@ -1,9 +1,19 @@
-/**
- * samples.js - Pre-built Architectural Sample Floor Plans
- */
+import { USER_SAVED_PROJECTS } from '../projects/user_projects.js';
 
 export function loadSamplePlan(app, templateKey = '30x40_2bhk') {
     app.clearAll();
+
+    // 1. Check if templateKey is a custom user-saved project
+    if (USER_SAVED_PROJECTS && USER_SAVED_PROJECTS[templateKey]) {
+        app.restoreState(USER_SAVED_PROJECTS[templateKey]);
+        app.saveHistory();
+        if (app.plotManager && app.plotManager.plot) {
+            app.canvasEngine.fitToBounds(app.plotManager.getBounds(), 60);
+        }
+        app.updateInspector();
+        app.render();
+        return;
+    }
 
     if (templateKey === '30x40_duplex_g1') {
         load30x40_Duplex_G1(app);

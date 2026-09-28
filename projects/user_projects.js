@@ -1,0 +1,1047 @@
+/**
+ * user_projects.js - Bundled User Saved Projects for Instant Cross-Device Access
+ */
+
+export const USER_SAVED_PROJECTS = {
+    "my_50x52_plan": {
+  "plot": {
+    "type": "polygon",
+    "vertices": [
+      {
+        "x": 0,
+        "y": 0
+      },
+      {
+        "x": 631,
+        "y": 0
+      },
+      {
+        "x": 631,
+        "y": 600
+      },
+      {
+        "x": 0,
+        "y": 600
+      }
+    ],
+    "setbacks": {
+      "front": 96,
+      "rear": 36,
+      "left": 36,
+      "right": 192
+    },
+    "roadSide": "front",
+    "name": "Plot Boundary"
+  },
+  "northAngle": 90,
+  "walls": [
+    {
+      "id": "wall_11",
+      "start": {
+        "x": 36,
+        "y": 36
+      },
+      "end": {
+        "x": 36,
+        "y": 216
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_13",
+      "start": {
+        "x": 36,
+        "y": 36
+      },
+      "end": {
+        "x": 211,
+        "y": 36
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_591",
+      "start": {
+        "x": 211,
+        "y": 36
+      },
+      "end": {
+        "x": 271,
+        "y": 36
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_627",
+      "start": {
+        "x": 271,
+        "y": 36
+      },
+      "end": {
+        "x": 343,
+        "y": 36
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_628",
+      "start": {
+        "x": 343,
+        "y": 36
+      },
+      "end": {
+        "x": 439,
+        "y": 36
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_644",
+      "start": {
+        "x": 439,
+        "y": 36
+      },
+      "end": {
+        "x": 438.99996723026067,
+        "y": 83.99999999998882
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_645",
+      "start": {
+        "x": 438.99996723026067,
+        "y": 83.99999999998882
+      },
+      "end": {
+        "x": 438.99975256244176,
+        "y": 215.62248024671527
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_646",
+      "start": {
+        "x": 36,
+        "y": 216
+      },
+      "end": {
+        "x": 211,
+        "y": 216
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_647",
+      "start": {
+        "x": 211,
+        "y": 216
+      },
+      "end": {
+        "x": 271,
+        "y": 216
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_648",
+      "start": {
+        "x": 271,
+        "y": 216
+      },
+      "end": {
+        "x": 438.99975256244176,
+        "y": 215.62248024671527
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_649",
+      "start": {
+        "x": 211,
+        "y": 36
+      },
+      "end": {
+        "x": 211,
+        "y": 132
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_650",
+      "start": {
+        "x": 271,
+        "y": 36
+      },
+      "end": {
+        "x": 271,
+        "y": 84
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_651",
+      "start": {
+        "x": 211,
+        "y": 132
+      },
+      "end": {
+        "x": 211,
+        "y": 216
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_652",
+      "start": {
+        "x": 271,
+        "y": 132
+      },
+      "end": {
+        "x": 271,
+        "y": 216
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_653",
+      "start": {
+        "x": 211,
+        "y": 132
+      },
+      "end": {
+        "x": 271,
+        "y": 132
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_654",
+      "start": {
+        "x": 271,
+        "y": 84
+      },
+      "end": {
+        "x": 271,
+        "y": 132
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_655",
+      "start": {
+        "x": 271,
+        "y": 84
+      },
+      "end": {
+        "x": 343,
+        "y": 83.99999999999521
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_656",
+      "start": {
+        "x": 343,
+        "y": 83.99999999999521
+      },
+      "end": {
+        "x": 438.99996723026067,
+        "y": 83.99999999998882
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_657",
+      "start": {
+        "x": 343,
+        "y": 36
+      },
+      "end": {
+        "x": 343,
+        "y": 83.99999999999521
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_697",
+      "start": {
+        "x": 438.99966276511185,
+        "y": 503.62275603506714
+      },
+      "end": {
+        "x": 438.99975256244176,
+        "y": 215.62248024671527
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_718",
+      "start": {
+        "x": 36,
+        "y": 216
+      },
+      "end": {
+        "x": 36,
+        "y": 360
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_741",
+      "start": {
+        "x": 36,
+        "y": 360
+      },
+      "end": {
+        "x": 36,
+        "y": 504
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_742",
+      "start": {
+        "x": 36,
+        "y": 504
+      },
+      "end": {
+        "x": 168,
+        "y": 504
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_1116",
+      "start": {
+        "x": 168,
+        "y": 504
+      },
+      "end": {
+        "x": 228,
+        "y": 504
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_1117",
+      "start": {
+        "x": 228,
+        "y": 504
+      },
+      "end": {
+        "x": 228,
+        "y": 432
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1118",
+      "start": {
+        "x": 228,
+        "y": 432
+      },
+      "end": {
+        "x": 168,
+        "y": 432
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1119",
+      "start": {
+        "x": 168,
+        "y": 432
+      },
+      "end": {
+        "x": 168,
+        "y": 504
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1120",
+      "start": {
+        "x": 168,
+        "y": 432
+      },
+      "end": {
+        "x": 168,
+        "y": 360
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1121",
+      "start": {
+        "x": 168,
+        "y": 360
+      },
+      "end": {
+        "x": 228,
+        "y": 360
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1122",
+      "start": {
+        "x": 228,
+        "y": 360
+      },
+      "end": {
+        "x": 228,
+        "y": 432
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_1123",
+      "start": {
+        "x": 228,
+        "y": 504
+      },
+      "end": {
+        "x": 438.99966276511185,
+        "y": 503.62275603506714
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_32",
+      "start": {
+        "x": 36,
+        "y": 360
+      },
+      "end": {
+        "x": 132,
+        "y": 360
+      },
+      "thickness": 4.5,
+      "type": "interior"
+    },
+    {
+      "id": "wall_33",
+      "start": {
+        "x": 631,
+        "y": 0
+      },
+      "end": {
+        "x": 631,
+        "y": 600
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_34",
+      "start": {
+        "x": 631,
+        "y": 600
+      },
+      "end": {
+        "x": 0,
+        "y": 600
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_35",
+      "start": {
+        "x": 0,
+        "y": 600
+      },
+      "end": {
+        "x": 0,
+        "y": 0
+      },
+      "thickness": 9,
+      "type": "exterior"
+    },
+    {
+      "id": "wall_36",
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "end": {
+        "x": 631,
+        "y": 0
+      },
+      "thickness": 9,
+      "type": "exterior"
+    }
+  ],
+  "openings": [
+    {
+      "id": "op_1",
+      "wallId": "wall_646",
+      "t": 0.8209595202398805,
+      "type": "door",
+      "subtype": "single",
+      "width": 36,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_2",
+      "wallId": "wall_651",
+      "t": 0.7309916470336258,
+      "type": "door",
+      "subtype": "single",
+      "width": 24,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_3",
+      "wallId": "wall_653",
+      "t": 0.5316807929681303,
+      "type": "door",
+      "subtype": "single",
+      "width": 24,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_4",
+      "wallId": "wall_648",
+      "t": 0.7810323002857293,
+      "type": "door",
+      "subtype": "single",
+      "width": 36,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_5",
+      "wallId": "wall_655",
+      "t": 0.46912783903701455,
+      "type": "door",
+      "subtype": "single",
+      "width": 24,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_6",
+      "wallId": "wall_657",
+      "t": 0.5900103446560245,
+      "type": "door",
+      "subtype": "single",
+      "width": 24,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_9",
+      "wallId": "wall_697",
+      "t": 0.21430086123080822,
+      "type": "door",
+      "subtype": "double",
+      "width": 60,
+      "flipHinge": false,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_10",
+      "wallId": "wall_1123",
+      "t": 0.7088586577622864,
+      "type": "door",
+      "subtype": "double",
+      "width": 60,
+      "flipHinge": false,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_20",
+      "wallId": "wall_741",
+      "t": 0.17053973013493243,
+      "type": "door",
+      "subtype": "single",
+      "width": 36,
+      "flipHinge": false,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_21",
+      "wallId": "wall_1119",
+      "t": 0.5592203898050967,
+      "type": "door",
+      "subtype": "single",
+      "width": 36,
+      "flipHinge": true,
+      "flipSwing": true,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_22",
+      "wallId": "wall_1121",
+      "t": 0.5130559720139942,
+      "type": "door",
+      "subtype": "double",
+      "width": 36,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "D",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_34",
+      "wallId": "wall_1123",
+      "t": 0.2505863188044564,
+      "type": "window",
+      "subtype": "standard",
+      "width": 48,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "W",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_37",
+      "wallId": "wall_645",
+      "t": 0.31007313330316216,
+      "type": "window",
+      "subtype": "standard",
+      "width": 48,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "W",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_38",
+      "wallId": "wall_718",
+      "t": 0.4287231384307846,
+      "type": "window",
+      "subtype": "standard",
+      "width": 48,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "W",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_39",
+      "wallId": "wall_1116",
+      "t": 0.45683408295852196,
+      "type": "window",
+      "subtype": "standard",
+      "width": 24,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "W",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_36",
+      "wallId": "wall_741",
+      "t": 0.4590213617606046,
+      "type": "window",
+      "subtype": "standard",
+      "width": 36,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "W",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_17",
+      "wallId": "wall_33",
+      "t": 0.7897441300680557,
+      "type": "gate",
+      "subtype": "sliding",
+      "width": 120,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "GATE",
+      "showLabel": false,
+      "showMeasurement": false
+    },
+    {
+      "id": "op_18",
+      "wallId": "wall_34",
+      "t": 0.15626270557928298,
+      "type": "gate",
+      "subtype": "sliding",
+      "width": 120,
+      "flipHinge": false,
+      "flipSwing": false,
+      "label": "GATE",
+      "showLabel": false,
+      "showMeasurement": false
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room_1",
+      "x": 129.13506383377327,
+      "y": 150.19609950526842,
+      "name": "Master Bedroom",
+      "width": 175,
+      "height": 180,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.75,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_3",
+      "x": 103.87106446776612,
+      "y": 432.7556221889056,
+      "name": "Kitchen",
+      "width": 132,
+      "height": 144,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.75,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_4",
+      "x": 343.8710644677662,
+      "y": 178.10194902548727,
+      "name": "Bedroom 2",
+      "width": 168,
+      "height": 132,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.75,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_5",
+      "x": 240,
+      "y": 72,
+      "name": "Bathroom",
+      "width": 60,
+      "height": 96,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 1.05,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 90,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_5",
+      "x": 245.00353543369067,
+      "y": 170.28018895851176,
+      "name": "Dressing",
+      "width": 60,
+      "height": 84,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 1,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 90,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_6",
+      "x": 319.88905547226386,
+      "y": 407.2443778110944,
+      "name": "Living Room",
+      "width": 211,
+      "height": 288,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 1,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_7",
+      "x": 308.8496928540417,
+      "y": 54.73039819685265,
+      "name": "Dressing",
+      "width": 72,
+      "height": 48,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 1,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_8",
+      "x": 393.4280453210221,
+      "y": 54.45409098763405,
+      "name": "Bathroom",
+      "width": 96,
+      "height": 48,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 1,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_17",
+      "x": 197.44174331702274,
+      "y": 395.2559698359758,
+      "name": "Pooja Room",
+      "width": 60,
+      "height": 72,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.5,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_10",
+      "x": 133.41015526727398,
+      "y": 288.3952927754239,
+      "name": "Dining Hall",
+      "width": 192,
+      "height": 216,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.65,
+      "showDimensions": false,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    },
+    {
+      "id": "room_31",
+      "x": 198.37080278634502,
+      "y": 454.74906728585444,
+      "name": "Store Room",
+      "width": 60,
+      "height": 72,
+      "color": "rgba(56, 189, 248, 0.06)",
+      "labelScale": 0.5,
+      "showDimensions": true,
+      "showArea": false,
+      "rotation": 0,
+      "tagStyle": "clean"
+    }
+  ],
+  "columns": [],
+  "furniture": [
+    {
+      "id": "fit_1",
+      "typeId": "wardrobe",
+      "x": 53.7,
+      "y": 127,
+      "width": 177.6,
+      "height": 27,
+      "rotation": 90
+    },
+    {
+      "id": "fit_9",
+      "typeId": "bed_king",
+      "x": 358,
+      "y": 121.5,
+      "width": 72.1,
+      "height": 71.9,
+      "rotation": 0
+    },
+    {
+      "id": "fit_18",
+      "typeId": "sofa_3p",
+      "x": 318,
+      "y": 311.8,
+      "width": 108.6,
+      "height": 36.1,
+      "rotation": 270
+    },
+    {
+      "id": "fit_13",
+      "typeId": "wardrobe",
+      "x": 282.1,
+      "y": 149.4,
+      "width": 124.9,
+      "height": 19.9,
+      "rotation": 90
+    },
+    {
+      "id": "fit_74",
+      "typeId": "kitchen_counter_corner",
+      "x": 52.5,
+      "y": 487.6,
+      "width": 24.9,
+      "height": 28.8,
+      "rotation": 270
+    },
+    {
+      "id": "fit_75",
+      "typeId": "kitchen_counter",
+      "x": 46.4,
+      "y": 439.1,
+      "width": 71.2,
+      "height": 16.7,
+      "rotation": 270
+    },
+    {
+      "id": "fit_76",
+      "typeId": "kitchen_counter",
+      "x": 114.1,
+      "y": 491.7,
+      "width": 94.4,
+      "height": 16.6,
+      "rotation": 180
+    },
+    {
+      "id": "fit_77",
+      "typeId": "kitchen_hob",
+      "x": 99,
+      "y": 490.8,
+      "width": 19.6,
+      "height": 13.1,
+      "rotation": 0
+    },
+    {
+      "id": "fit_46",
+      "typeId": "car_sedan",
+      "x": 540,
+      "y": 259.7,
+      "width": 72,
+      "height": 180,
+      "rotation": 0
+    },
+    {
+      "id": "fit_48",
+      "typeId": "bed_king",
+      "x": 136.2,
+      "y": 84.6,
+      "width": 79.2,
+      "height": 85.8,
+      "rotation": 0
+    },
+    {
+      "id": "fit_49",
+      "typeId": "tv_unit",
+      "x": 425.5,
+      "y": 316,
+      "width": 74.2,
+      "height": 17.3,
+      "rotation": 90
+    },
+    {
+      "id": "fit_12",
+      "typeId": "kitchen_sink",
+      "x": 149.1,
+      "y": 490.9,
+      "width": 22.5,
+      "height": 14.8,
+      "rotation": 0
+    }
+  ],
+  "dimensions": [],
+  "roads": [],
+  "stairs": [
+    {
+      "id": "stair_142",
+      "x": 90.23388305847074,
+      "y": 287.0194902548725,
+      "type": "open_well",
+      "flightWidth": 36,
+      "treads": 18,
+      "treadDepth": 10,
+      "landingDepth": 36,
+      "wellWidth": 64,
+      "rotation": 270,
+      "turnDirection": "right",
+      "showBreakLine": true,
+      "landingSteps": 4,
+      "middleTreads": 6
+    },
+    {
+      "id": "stair_253",
+      "x": 94.33942226064156,
+      "y": 549.2279748646644,
+      "type": "dogleg",
+      "flightWidth": 36,
+      "treads": 16,
+      "treadDepth": 10,
+      "landingDepth": 36,
+      "wellWidth": 6,
+      "rotation": 270,
+      "turnDirection": "left",
+      "showBreakLine": true,
+      "landingSteps": 0,
+      "middleTreads": 3
+    }
+  ]
+}
+};
