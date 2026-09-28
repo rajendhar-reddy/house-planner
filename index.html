@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>2D House Planner CAD - Professional Architectural Drafting</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -22,25 +22,25 @@
 
             <!-- Center Controls -->
             <div class="navbar-center">
-                <button class="nav-btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
-                <button class="nav-btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
-                <button class="nav-btn" id="deleteBtn" title="Delete Selected (Del)">🗑 Delete</button>
+                <button class="nav-btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>↶ <span class="btn-text">Undo</span></button>
+                <button class="nav-btn" id="redoBtn" title="Redo (Ctrl+Y)" disabled>↷ <span class="btn-text">Redo</span></button>
+                <button class="nav-btn" id="deleteBtn" title="Delete Selected (Del)">🗑 <span class="btn-text">Delete</span></button>
 
-                <span style="color: var(--border-color);">|</span>
+                <span class="nav-separator" style="color: var(--border-color);">|</span>
 
                 <!-- Units switcher -->
-                <button class="nav-btn active" id="unitToggleBtn" title="Switch between Imperial (Ft/In) and Metric (M)">Units: Imperial (Ft/In)</button>
+                <button class="nav-btn active" id="unitToggleBtn" title="Switch between Imperial (Ft/In) and Metric (M)">📏 <span class="btn-text">Units: Imperial</span></button>
 
                 <!-- Grid and Snapping -->
-                <button class="nav-btn active" id="snapGridBtn" title="Toggle Grid Snapping">🧲 Snap: ON</button>
-                <button class="nav-btn" id="orthoBtn" title="Ortho Mode: Lock 90° & 45° Angles (Hold Shift)">📐 Ortho: OFF</button>
+                <button class="nav-btn active" id="snapGridBtn" title="Toggle Grid Snapping">🧲 <span class="btn-text">Snap: ON</span></button>
+                <button class="nav-btn" id="orthoBtn" title="Ortho Mode: Lock 90° & 45° Angles (Hold Shift)">📐 <span class="btn-text">Ortho: OFF</span></button>
 
-                <span style="color: var(--border-color);">|</span>
+                <span class="nav-separator" style="color: var(--border-color);">|</span>
 
                 <!-- Zoom Controls -->
                 <button class="nav-btn" id="zoomOutBtn" title="Zoom Out (-)">−</button>
                 <button class="nav-btn" id="zoomInBtn" title="Zoom In (+)">+</button>
-                <button class="nav-btn" id="zoomFitBtn" title="Fit Drawing to Screen (0)">⊡ Fit</button>
+                <button class="nav-btn" id="zoomFitBtn" title="Fit Drawing to Screen (0)">⊡ <span class="btn-text">Fit</span></button>
             </div>
 
             <!-- Right Controls -->
@@ -59,17 +59,20 @@
                     </optgroup>
                 </select>
 
+                <!-- Inspector Drawer Toggle (Vital for Mobile / Tablet) -->
+                <button class="nav-btn inspector-toggle-btn" id="toggleInspectorBtn" title="Toggle Properties Inspector">⚙️ <span class="btn-text">Properties</span></button>
+
                 <!-- Export & Project Save -->
-                <button class="nav-btn" id="saveJsonBtn" title="Save Project as JSON">💾 Save</button>
-                <button class="nav-btn" id="loadJsonBtn" title="Open Project File">📂 Open</button>
+                <button class="nav-btn" id="saveJsonBtn" title="Save Project as JSON">💾 <span class="btn-text">Save</span></button>
+                <button class="nav-btn" id="loadJsonBtn" title="Open Project File">📂 <span class="btn-text">Open</span></button>
                 <input type="file" id="loadJsonInput" accept=".json" style="display:none;">
 
-                <button class="nav-btn" id="exportPngBtn" title="Export High-Res PNG with Title Block">🖼 Export PNG</button>
-                <button class="nav-btn" id="exportPdfBtn" title="Export Architectural PDF (Print Ready A4/A3)">📕 PDF</button>
-                <button class="nav-btn" id="exportSvgBtn" title="Export Vector SVG">📐 SVG</button>
-                <button class="nav-btn" id="exportDxfBtn" title="Export AutoCAD DXF File">📄 DXF</button>
+                <button class="nav-btn" id="exportPngBtn" title="Export High-Res PNG with Title Block">🖼 <span class="btn-text">PNG</span></button>
+                <button class="nav-btn" id="exportPdfBtn" title="Export Architectural PDF (Print Ready A4/A3)">📕 <span class="btn-text">PDF</span></button>
+                <button class="nav-btn" id="exportSvgBtn" title="Export Vector SVG">📐 <span class="btn-text">SVG</span></button>
+                <button class="nav-btn" id="exportDxfBtn" title="Export AutoCAD DXF File">📄 <span class="btn-text">DXF</span></button>
 
-                <button class="nav-btn" id="clearAllBtn" title="Clear Canvas" style="color:var(--accent-red);">✕ Clear</button>
+                <button class="nav-btn" id="clearAllBtn" title="Clear Canvas" style="color:var(--accent-red);">✕</button>
             </div>
         </header>
 
@@ -239,12 +242,24 @@
             <!-- Center Interactive CAD Canvas -->
             <div class="canvas-viewport" id="canvasContainer">
                 <canvas id="cadCanvas"></canvas>
+
+                <!-- Floating Canvas Controls for Mobile / Tablet touchscreens -->
+                <div class="canvas-floating-controls" id="canvasFloatControls">
+                    <button class="float-btn" id="floatZoomInBtn" title="Zoom In">+</button>
+                    <button class="float-btn" id="floatZoomOutBtn" title="Zoom Out">−</button>
+                    <button class="float-btn" id="floatZoomFitBtn" title="Fit Drawing to Screen">⊡</button>
+                    <button class="float-btn mobile-props-btn" id="floatPropsBtn" title="Open Properties Inspector">⚙️</button>
+                </div>
             </div>
 
-            <!-- Right Inspector Sidebar -->
-            <aside class="right-sidebar">
+            <!-- Mobile Drawer Backdrop -->
+            <div class="inspector-backdrop" id="inspectorBackdrop"></div>
+
+            <!-- Right Inspector Sidebar (Floating Drawer on Tablets / Mobile) -->
+            <aside class="right-sidebar" id="rightSidebar">
                 <div class="inspector-header">
                     <span>Properties Inspector</span>
+                    <button class="inspector-close-btn" id="closeInspectorBtn" title="Close Inspector">✕</button>
                 </div>
                 <div class="inspector-body" id="inspectorBody">
                     <!-- Populated dynamically by app.js -->
@@ -261,7 +276,7 @@
                 <span style="color: var(--border-color);">|</span>
                 <span class="status-pill" id="autosaveStatus" style="color:#22c55e; border-color:rgba(34,197,94,0.3); font-weight:600;">● Auto-save Active</span>
             </div>
-            <div class="status-right">
+            <div class="status-right hide-on-mobile">
                 <span class="status-pill">Drag: Move Wall/Corner</span>
                 <span class="status-pill">W: Wall</span>
                 <span class="status-pill">C: Column</span>

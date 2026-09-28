@@ -87,6 +87,70 @@ export class CanvasEngine {
 
             if (this.onViewChange) this.onViewChange();
         }, { passive: false });
+
+        // Multi-touch gestures: 2-finger pinch-to-zoom & 2-finger pan
+        this.touchStartDist = 0;
+        this.touchStartScale = this.scale;
+        this.touchStartMid = null;
+        this.touchStartOffset = null;
+        this.isTouchPinching = false;
+
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                this.isTouchPinching = true;
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const rect = this.canvas.getBoundingClientRect();
+                this.touchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                this.touchStartScale = this.scale;
+                this.touchStartMid = {
+                    x: (t1.clientX + t2.clientX) / 2 - rect.left,
+                    y: (t1.clientY + t2.clientY) / 2 - rect.top
+                };
+                this.touchStartOffset = { x: this.offsetX, y: this.offsetY };
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && this.isTouchPinching) {
+                e.preventDefault();
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const rect = this.canvas.getBoundingClientRect();
+                const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                const currentMid = {
+                    x: (t1.clientX + t2.clientX) / 2 - rect.left,
+                    y: (t1.clientY + t2.clientY) / 2 - rect.top
+                };
+
+                if (this.touchStartDist > 0) {
+                    const ratio = currentDist / this.touchStartDist;
+                    const newScale = Math.min(Math.max(this.touchStartScale * ratio, 0.1), 30.0);
+
+                    const midX = this.touchStartMid.x;
+                    const midY = this.touchStartMid.y;
+
+                    const deltaX = currentMid.x - this.touchStartMid.x;
+                    const deltaY = currentMid.y - this.touchStartMid.y;
+
+                    this.offsetX = midX - (midX - this.touchStartOffset.x) * (newScale / this.touchStartScale) + deltaX;
+                    this.offsetY = midY - (midY - this.touchStartOffset.y) * (newScale / this.touchStartScale) + deltaY;
+                    this.scale = newScale;
+
+                    if (this.onViewChange) this.onViewChange();
+                }
+            }
+        }, { passive: false });
+
+        const endTouch = (e) => {
+            if (e.touches.length < 2) {
+                this.isTouchPinching = false;
+                this.touchStartDist = 0;
+            }
+        };
+        this.canvas.addEventListener('touchend', endTouch);
+        this.canvas.addEventListener('touchcancel', endTouch);
     }
 
     // Coordinate conversion
@@ -134,8 +198,9 @@ export class CanvasEngine {
             };
         }
 
-        // Magnetic radius in world units
-        const magnetRadius = 16 / this.scale;
+        // Magnetic radius in world units (generous radius for touchscreens)
+        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        const magnetRadius = (isTouch ? 24 : 16) / this.scale;
 
         // 2. Snap to geometry points (endpoints, midpoints, corners)
         if (this.snapToPoints && snapTargets.length > 0) {

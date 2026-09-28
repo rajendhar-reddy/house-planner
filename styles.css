@@ -763,6 +763,295 @@ input[type="range"] {
     box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
 }
 
+/* ==========================================
+   TOUCH & MOBILE CONTROLS & FLOATING BUTTONS
+   ========================================== */
+#cadCanvas {
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+
+.canvas-floating-controls {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 45;
+}
+
+.float-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.92);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.float-btn:hover, .float-btn:active {
+    background: var(--accent-blue);
+    color: #0f172a;
+    border-color: var(--accent-blue);
+    transform: scale(1.06);
+}
+
+.inspector-close-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.inspector-close-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.inspector-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 990;
+    animation: fadeInModal 0.18s ease-out;
+}
+
+.inspector-backdrop.active {
+    display: block;
+}
+
+.inspector-toggle-btn {
+    display: none;
+}
+
+/* ==========================================
+   RESPONSIVE DESIGN BREAKPOINTS
+   ========================================== */
+
+/* Tablet Breakpoint (max-width: 1024px) */
+@media (max-width: 1024px) {
+    .inspector-toggle-btn {
+        display: inline-flex;
+    }
+
+    .top-navbar {
+        padding: 0 10px;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .top-navbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .navbar-center, .navbar-right {
+        flex-shrink: 0;
+    }
+
+    .badge-version {
+        display: none;
+    }
+
+    .nav-btn {
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+
+    .nav-select {
+        padding: 5px 8px;
+        font-size: 12px;
+        max-width: 190px;
+    }
+
+    .floor-nav-bar {
+        padding: 0 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .floor-nav-bar::-webkit-scrollbar {
+        display: none;
+    }
+    .floor-nav-left, .floor-nav-right {
+        flex-shrink: 0;
+        gap: 6px;
+    }
+    .floor-tab-btn, .floor-action-btn {
+        padding: 4px 8px;
+        font-size: 11.5px;
+        flex-shrink: 0;
+    }
+
+    /* Right Inspector converts into slide-over drawer */
+    .right-sidebar {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 330px;
+        max-width: 88vw;
+        height: 100vh;
+        transform: translateX(100%);
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 1000;
+        box-shadow: -8px 0 30px rgba(0, 0, 0, 0.65);
+    }
+
+    .right-sidebar.open {
+        transform: translateX(0);
+    }
+
+    .inspector-close-btn {
+        display: block;
+    }
+
+    .left-tool-palette {
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+    .left-tool-palette::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* Mobile Devices (max-width: 768px) */
+@media (max-width: 768px) {
+    .top-navbar {
+        height: 46px;
+    }
+
+    .brand-logo {
+        font-size: 14px;
+    }
+    .brand-logo svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .nav-btn .btn-text {
+        display: none;
+    }
+
+    .nav-btn {
+        padding: 5px 8px;
+        font-size: 14px;
+        min-width: 32px;
+        justify-content: center;
+    }
+
+    .nav-separator {
+        display: none;
+    }
+
+    .nav-select {
+        max-width: 150px;
+        font-size: 11px;
+    }
+
+    .floor-nav-bar {
+        height: 38px;
+    }
+
+    .left-tool-palette {
+        top: 8px;
+        left: 8px;
+        padding: 4px;
+        gap: 4px;
+        max-height: calc(100vh - 120px);
+    }
+
+    .tool-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+    .tool-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+    .tool-btn::after {
+        display: none !important; /* No tooltips on mobile */
+    }
+
+    .status-right.hide-on-mobile {
+        display: none;
+    }
+
+    .bottom-status-bar {
+        height: 28px;
+        padding: 0 10px;
+        font-size: 11px;
+    }
+
+    .tool-sub-bar {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    .sub-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .modal-card {
+        width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+}
+
+/* Compact Phones (max-width: 480px) */
+@media (max-width: 480px) {
+    .brand-logo span {
+        display: none; /* Icon only */
+    }
+
+    .nav-select {
+        max-width: 125px;
+    }
+
+    .canvas-floating-controls {
+        right: 10px;
+        bottom: 10px;
+        gap: 6px;
+    }
+
+    .float-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    .input-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .right-sidebar {
+        width: 100vw;
+        max-width: 100vw;
+    }
+}
+
 /* Print CSS */
 @media print {
     body, html {

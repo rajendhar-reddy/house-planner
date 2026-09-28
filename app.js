@@ -565,6 +565,46 @@ export class HousePlannerApp {
         window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         window.addEventListener('mouseup', (e) => this.handleMouseUp(e));
 
+        // Touch events for mobile/tablet drafting
+        const synthesizeMouseEvent = (type, touch, originalEvent) => {
+            return {
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                button: 0,
+                buttons: type === 'mouseup' ? 0 : 1,
+                shiftKey: originalEvent.shiftKey || false,
+                ctrlKey: originalEvent.ctrlKey || false,
+                altKey: originalEvent.altKey || false,
+                target: c,
+                preventDefault: () => originalEvent.preventDefault && originalEvent.preventDefault(),
+                stopPropagation: () => originalEvent.stopPropagation && originalEvent.stopPropagation()
+            };
+        };
+
+        c.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1 && !this.canvasEngine.isTouchPinching) {
+                const mouseEv = synthesizeMouseEvent('mousedown', e.touches[0], e);
+                this.handleMouseDown(mouseEv);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && !this.canvasEngine.isTouchPinching) {
+                const mouseEv = synthesizeMouseEvent('mousemove', e.touches[0], e);
+                this.handleMouseMove(mouseEv);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            if (!this.canvasEngine.isTouchPinching) {
+                const touch = e.changedTouches[0] || e.touches[0];
+                if (touch) {
+                    const mouseEv = synthesizeMouseEvent('mouseup', touch, e);
+                    this.handleMouseUp(mouseEv);
+                }
+            }
+        });
+
         // Keyboard shortcuts
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -2194,6 +2234,49 @@ export class HousePlannerApp {
         document.getElementById('saveProjectInfoBtn')?.addEventListener('click', () => {
             this.saveProjectInfoFromModal();
         });
+
+        // Responsive Mobile / Tablet Inspector Drawer Toggle
+        document.getElementById('toggleInspectorBtn')?.addEventListener('click', () => {
+            this.toggleInspector();
+        });
+        document.getElementById('floatPropsBtn')?.addEventListener('click', () => {
+            this.toggleInspector();
+        });
+        document.getElementById('closeInspectorBtn')?.addEventListener('click', () => {
+            this.toggleInspector(false);
+        });
+        document.getElementById('inspectorBackdrop')?.addEventListener('click', () => {
+            this.toggleInspector(false);
+        });
+
+        // Floating Canvas Zoom & Fit Buttons for touchscreens
+        document.getElementById('floatZoomInBtn')?.addEventListener('click', () => {
+            this.canvasEngine.scale = Math.min(this.canvasEngine.scale * 1.25, 30.0);
+            this.render();
+        });
+        document.getElementById('floatZoomOutBtn')?.addEventListener('click', () => {
+            this.canvasEngine.scale = Math.max(this.canvasEngine.scale * 0.8, 0.1);
+            this.render();
+        });
+        document.getElementById('floatZoomFitBtn')?.addEventListener('click', () => {
+            const bounds = Exporter.getProjectBounds(this);
+            if (bounds) this.canvasEngine.fitToBounds(bounds, 60);
+            this.render();
+        });
+    }
+
+    toggleInspector(forceState = null) {
+        const sidebar = document.getElementById('rightSidebar');
+        const backdrop = document.getElementById('inspectorBackdrop');
+        const toggleBtn = document.getElementById('toggleInspectorBtn');
+        const floatPropsBtn = document.getElementById('floatPropsBtn');
+        if (!sidebar) return;
+
+        const isOpen = forceState !== null ? forceState : !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', isOpen);
+        if (backdrop) backdrop.classList.toggle('active', isOpen);
+        if (toggleBtn) toggleBtn.classList.toggle('active', isOpen);
+        if (floatPropsBtn) floatPropsBtn.classList.toggle('active', isOpen);
     }
 
     openProjectInfoModal() {
