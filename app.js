@@ -17,6 +17,7 @@ import { Exporter } from './modules/exporter.js';
 import { loadSamplePlan } from './modules/samples.js';
 import { FloorManager } from './modules/floors.js';
 import { ProjectInfoManager } from './modules/project_info.js';
+import { SlabManager } from './modules/slab.js';
 
 window.Exporter = Exporter;
 
@@ -26,6 +27,9 @@ export class HousePlannerApp {
         this.canvasElement = document.getElementById('cadCanvas');
         this.canvasEngine = new CanvasEngine(this.canvasElement);
         this.plotManager = new PlotManager();
+        this.plotManager.app = this;
+        this.slabManager = new SlabManager(this);
+        this.plotManager.slabManager = this.slabManager;
         this.roadManager = new RoadManager();
         this.wallManager = new WallManager();
         this.columnManager = new ColumnManager();
@@ -288,8 +292,9 @@ export class HousePlannerApp {
             showChainedDimensions: this.plotManager.showChainedDimensions !== undefined ? this.plotManager.showChainedDimensions : true,
             showCornerMarkers: this.plotManager.showCornerMarkers !== undefined ? this.plotManager.showCornerMarkers : true,
             showSetbackShading: this.plotManager.showSetbackShading !== undefined ? this.plotManager.showSetbackShading : true,
-            showSlabProjection: this.plotManager.showSlabProjection !== undefined ? this.plotManager.showSlabProjection : false,
-            slabProjectionOffset: this.plotManager.slabProjectionOffset !== undefined ? this.plotManager.slabProjectionOffset : 18,
+            showSlabProjection: this.slabManager ? this.slabManager.enabled : (this.plotManager.showSlabProjection !== undefined ? this.plotManager.showSlabProjection : false),
+            slabProjectionOffset: this.slabManager ? this.slabManager.uniformOffset : (this.plotManager.slabProjectionOffset !== undefined ? this.plotManager.slabProjectionOffset : 18),
+            slab: this.slabManager ? this.slabManager.serialize() : null,
             showLandscapeWash: !!this.plotManager.showLandscapeWash,
             walls: this.wallManager.walls.map(w => ({
                 id: w.id, start: { ...w.start }, end: { ...w.end },
@@ -368,8 +373,20 @@ export class HousePlannerApp {
         if (state.showChainedDimensions !== undefined) this.plotManager.showChainedDimensions = state.showChainedDimensions;
         if (state.showCornerMarkers !== undefined) this.plotManager.showCornerMarkers = state.showCornerMarkers;
         if (state.showSetbackShading !== undefined) this.plotManager.showSetbackShading = state.showSetbackShading;
-        if (state.showSlabProjection !== undefined) this.plotManager.showSlabProjection = state.showSlabProjection;
-        if (state.slabProjectionOffset !== undefined) this.plotManager.slabProjectionOffset = state.slabProjectionOffset;
+        if (state.slab && this.slabManager) {
+            this.slabManager.deserialize(state.slab);
+            this.plotManager.showSlabProjection = this.slabManager.enabled;
+            this.plotManager.slabProjectionOffset = this.slabManager.uniformOffset;
+        } else {
+            if (state.showSlabProjection !== undefined) {
+                this.plotManager.showSlabProjection = state.showSlabProjection;
+                if (this.slabManager) this.slabManager.enabled = state.showSlabProjection;
+            }
+            if (state.slabProjectionOffset !== undefined) {
+                this.plotManager.slabProjectionOffset = state.slabProjectionOffset;
+                if (this.slabManager) this.slabManager.setUniformOffset(state.slabProjectionOffset);
+            }
+        }
         if (state.showLandscapeWash !== undefined) this.plotManager.showLandscapeWash = state.showLandscapeWash;
 
         // Restore roads
@@ -503,12 +520,22 @@ export class HousePlannerApp {
         });
 
         // Update cursor style
-        if (tool === 'select') {
+        if (tool === 'select' || tool === 'slab') {
             this.canvasElement.style.cursor = 'default';
         } else if (tool === 'pan') {
             this.canvasElement.style.cursor = 'grab';
         } else {
             this.canvasElement.style.cursor = 'crosshair';
+        }
+
+        if (tool === 'slab') {
+            if (this.slabManager) {
+                this.slabManager.enabled = true;
+                this.plotManager.showSlabProjection = true;
+                this.selectedCategory = 'slab';
+                this.selectedObject = this.slabManager;
+                this.updateInspector();
+            }
         }
 
         // Show/hide secondary options bar for tool (e.g. furniture picker or wall thickness)
@@ -537,6 +564,9 @@ export class HousePlannerApp {
             this.roadManager.removeRoad(this.selectedObject.id);
         } else if (this.selectedCategory === 'stair') {
             this.stairManager.removeStair(this.selectedObject.id);
+        } else if (this.selectedCategory === 'slab') {
+            if (this.slabManager) this.slabManager.enabled = false;
+            this.plotManager.showSlabProjection = false;
         } else if (this.selectedCategory === 'plot') {
             this.plotManager.clear();
         }
@@ -673,6 +703,8 @@ export class HousePlannerApp {
                 this.setTool('road');
             } else if (e.key === 's' || e.key === 'S') {
                 this.setTool('stairs');
+            } else if (e.key === 'j' || e.key === 'J') {
+                this.setTool('slab');
             } else if (e.key === '1') {
                 if (this.floorManager) {
                     this.floorManager.setViewMode('active');
@@ -766,6 +798,25 @@ export class HousePlannerApp {
                     this.dragTarget = { type: 'compass' };
                     this.dragHasMoved = false;
                     return;
+                }
+
+                // 1b. Check if clicking on slab handle
+                if (this.slabManager && (this.slabManager.enabled || this.activeTool === 'slab')) {
+                    const slabHandle = this.slabManager.hitTestHandles(world.x, world.y, scale);
+                    if (slabHandle) {
+                        this.isDragging = true;
+                        this.dragTarget = {
+                            type: 'slab_handle',
+                            handle: slabHandle,
+                            startX: world.x,
+                            startY: world.y
+                        };
+                        this.dragHasMoved = false;
+                        this.selectedCategory = 'slab';
+                        this.selectedObject = this.slabManager;
+                        this.updateInspector();
+                        return;
+                    }
                 }
 
                 // 2. Check if clicking a corner handle of the selected wall
@@ -953,6 +1004,29 @@ export class HousePlannerApp {
                     return;
                 }
 
+                this.handleSelectClick(world.x, world.y);
+                break;
+            }
+
+            case 'slab': {
+                const scale = this.canvasEngine.scale;
+                if (this.slabManager) {
+                    const slabHandle = this.slabManager.hitTestHandles(world.x, world.y, scale);
+                    if (slabHandle) {
+                        this.isDragging = true;
+                        this.dragTarget = {
+                            type: 'slab_handle',
+                            handle: slabHandle,
+                            startX: world.x,
+                            startY: world.y
+                        };
+                        this.dragHasMoved = false;
+                        this.selectedCategory = 'slab';
+                        this.selectedObject = this.slabManager;
+                        this.updateInspector();
+                        return;
+                    }
+                }
                 this.handleSelectClick(world.x, world.y);
                 break;
             }
@@ -1151,6 +1225,12 @@ export class HousePlannerApp {
 
             if (this.dragTarget.type === 'compass') {
                 this.plotManager.setCompassAngleFromPoint(world.x, world.y, scale);
+                this.updateInspector();
+                return;
+            }
+
+            if (this.dragTarget.type === 'slab_handle') {
+                this.slabManager.handleDrag(this.dragTarget.handle, world.x, world.y, this.dragTarget.startX, this.dragTarget.startY);
                 this.updateInspector();
                 return;
             }
@@ -1369,8 +1449,19 @@ export class HousePlannerApp {
 
         // Check hover cursors
         const scale = this.canvasEngine.scale;
-        if (!this.isDragging && this.activeTool === 'select') {
+        if (!this.isDragging && (this.activeTool === 'select' || this.activeTool === 'slab')) {
             let cursorSet = false;
+
+            // 0. Check slab handles
+            if (this.slabManager && (this.selectedCategory === 'slab' || this.activeTool === 'slab')) {
+                const sh = this.slabManager.hitTestHandles(world.x, world.y, scale);
+                if (sh) {
+                    if (sh.id === 'front' || sh.id === 'rear') this.canvasElement.style.cursor = 'ns-resize';
+                    else if (sh.id === 'left' || sh.id === 'right') this.canvasElement.style.cursor = 'ew-resize';
+                    else this.canvasElement.style.cursor = 'pointer';
+                    cursorSet = true;
+                }
+            }
 
             // 1. Check selected furniture handles
             if (this.selectedCategory === 'furniture' && this.selectedObject) {
@@ -1432,6 +1523,9 @@ export class HousePlannerApp {
         }
 
         if (this.isDragging) {
+            if (this.dragTarget && this.dragTarget.type === 'slab_handle') {
+                if (this.slabManager) this.slabManager.finishDrag();
+            }
             if (this.dragHasMoved) {
                 this.saveHistory();
             }
@@ -1529,6 +1623,15 @@ export class HousePlannerApp {
             this.selectedCategory = 'road';
             this.selectedObject = road;
             this.roadManager.selectedRoadId = road.id;
+            this.updateInspector();
+            return;
+        }
+
+        // 6b. Check Roof Slab Projection
+        if (this.slabManager && this.slabManager.enabled && this.slabManager.hitTest(worldX, worldY, scale)) {
+            this.clearSelection();
+            this.selectedCategory = 'slab';
+            this.selectedObject = this.slabManager;
             this.updateInspector();
             return;
         }
@@ -1727,6 +1830,51 @@ export class HousePlannerApp {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(badgeText, 0, badgeY + badgeH / 2);
+            ctx.restore();
+        }
+
+        // Roof Slab Overhang live HUD badge while dragging handles
+        if (this.isDragging && this.dragTarget && this.dragTarget.type === 'slab_handle' && this.slabManager) {
+            const h = this.dragTarget.handle;
+            const off = this.slabManager.getEffectiveOffsets();
+            let label = '';
+            if (this.slabManager.isUniform) {
+                label = `⤢ Slab Overhang: ${units.formatLength(this.slabManager.uniformOffset)}`;
+            } else if (h.id === 'front') {
+                label = `⬍ Front Overhang: ${units.formatLength(off.front)}`;
+            } else if (h.id === 'rear') {
+                label = `⬍ Rear Overhang: ${units.formatLength(off.rear)}`;
+            } else if (h.id === 'left') {
+                label = `⬌ Left Overhang: ${units.formatLength(off.left)}`;
+            } else if (h.id === 'right') {
+                label = `⬌ Right Overhang: ${units.formatLength(off.right)}`;
+            } else {
+                label = `⤢ Slab Overhang: ${units.formatLength(this.slabManager.uniformOffset)}`;
+            }
+
+            ctx.save();
+            const fontSize = Math.max(12 / scale, 4);
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            const tw = ctx.measureText(label).width;
+            const padX = 8 / scale;
+            const padY = 5 / scale;
+            const badgeW = tw + padX * 2;
+            const badgeH = fontSize + padY * 2;
+            const badgeX = this.draftCurrent ? this.draftCurrent.x : h.x;
+            const badgeY = (this.draftCurrent ? this.draftCurrent.y : h.y) - badgeH - 12 / scale;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.2 / scale;
+            ctx.beginPath();
+            ctx.roundRect(badgeX - badgeW / 2, badgeY, badgeW, badgeH, 4 / scale);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#38bdf8';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, badgeX, badgeY + badgeH / 2);
             ctx.restore();
         }
 
@@ -2645,6 +2793,70 @@ export class HousePlannerApp {
                 this.updateInspector();
                 this.render();
             });
+        } else if (this.activeTool === 'slab') {
+            subBar.style.display = 'flex';
+            const slab = this.slabManager;
+            const isEnabled = slab ? slab.enabled : false;
+
+            subBar.innerHTML = `
+                <span class="sub-label">Roof Slab:</span>
+                <button class="sub-btn ${isEnabled ? 'active' : ''}" id="slabSubToggleBtn" title="Toggle Slab Projection Visibility">${isEnabled ? '✓ Slab ON' : '✕ Slab OFF'}</button>
+                <span style="color:var(--border-color); margin: 0 4px;">|</span>
+                <span class="sub-label">Mode:</span>
+                <button class="sub-btn ${slab.mode === 'envelope' ? 'active' : ''}" id="slabModeEnvelopeBtn" title="Auto-contour slab along exterior building envelope">Adaptive Contour</button>
+                <button class="sub-btn ${slab.mode === 'bounds' ? 'active' : ''}" id="slabModeBoundsBtn" title="Rectangular bounding box envelope">Bounding Box</button>
+                <span style="color:var(--border-color); margin: 0 4px;">|</span>
+                <span class="sub-label">Presets:</span>
+                <button class="sub-btn" data-slab-preset="standard" title="1'-6&quot; Uniform chajja">1'-6" Standard</button>
+                <button class="sub-btn" data-slab-preset="portico" title="4'-0&quot; Entrance portico cantilever">4' Portico</button>
+                <button class="sub-btn" data-slab-preset="balcony" title="5'-0&quot; Balcony projection">5' Balcony</button>
+                <button class="sub-btn" data-slab-preset="flush" title="Flush with exterior walls (0&quot;)">Flush (0")</button>
+                <span style="color:var(--border-color); margin: 0 4px;">|</span>
+                <button class="sub-btn highlight" id="slabOpenInspectorBtn" title="Open complete slab customization inspector">⚙️ Customize All</button>
+            `;
+
+            document.getElementById('slabSubToggleBtn')?.addEventListener('click', () => {
+                slab.enabled = !slab.enabled;
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.saveHistory();
+                this.updateToolSubOptions();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabModeEnvelopeBtn')?.addEventListener('click', () => {
+                slab.mode = 'envelope';
+                this.saveHistory();
+                this.updateToolSubOptions();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabModeBoundsBtn')?.addEventListener('click', () => {
+                slab.mode = 'bounds';
+                this.saveHistory();
+                this.updateToolSubOptions();
+                this.updateInspector();
+                this.render();
+            });
+
+            subBar.querySelectorAll('button[data-slab-preset]').forEach(b => {
+                b.onclick = () => {
+                    slab.applyPreset(b.dataset.slabPreset);
+                    this.plotManager.showSlabProjection = slab.enabled;
+                    this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                    this.saveHistory();
+                    this.updateToolSubOptions();
+                    this.updateInspector();
+                    this.render();
+                };
+            });
+
+            document.getElementById('slabOpenInspectorBtn')?.addEventListener('click', () => {
+                this.selectedCategory = 'slab';
+                this.selectedObject = slab;
+                this.updateInspector();
+            });
         } else {
             subBar.style.display = 'none';
         }
@@ -2746,12 +2958,19 @@ export class HousePlannerApp {
                             <span>Buildable Envelope Shading</span>
                         </label>
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
-                            <input type="checkbox" id="toggleSlabProjection" ${this.plotManager.showSlabProjection ? 'checked' : ''}>
-                            <span>Roof Slab Line (Dotted Line)</span>
+                            <input type="checkbox" id="toggleSlabProjection" ${(this.slabManager && this.slabManager.enabled) || this.plotManager.showSlabProjection ? 'checked' : ''}>
+                            <span style="font-weight:600;">Roof Slab Line (Overhang / Chajja)</span>
                         </label>
-                        <div id="slabProjDetails" style="display:${this.plotManager.showSlabProjection ? 'flex' : 'none'}; align-items:center; justify-content:space-between; padding-left:22px; font-size:11px;">
-                            <span style="color:var(--text-secondary);">Slab Overhang:</span>
-                            <input type="text" id="slabProjOffsetInput" value="${units.formatLength(this.plotManager.slabProjectionOffset || 18)}" style="width:80px; padding:2px 6px; font-size:11px; background:var(--bg-panel); border:1px solid var(--border-color); color:var(--text-main); border-radius:4px;">
+                        <div id="slabProjDetails" style="display:${((this.slabManager && this.slabManager.enabled) || this.plotManager.showSlabProjection) ? 'flex' : 'none'}; flex-direction:column; gap:6px; padding-left:22px; font-size:11px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between;">
+                                <span style="color:var(--text-secondary);">Slab Overhang:</span>
+                                <input type="text" id="slabProjOffsetInput" value="${units.formatLength(this.slabManager ? this.slabManager.uniformOffset : (this.plotManager.slabProjectionOffset || 18))}" style="width:80px; padding:2px 6px; font-size:11px; background:var(--bg-panel); border:1px solid var(--border-color); color:var(--text-main); border-radius:4px;">
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+                                <button class="sub-btn" id="qSlabPresetStd" style="font-size:10px; padding:2px 4px;">1'-6" Std</button>
+                                <button class="sub-btn" id="qSlabPresetPortico" style="font-size:10px; padding:2px 4px;">4' Portico</button>
+                            </div>
+                            <button class="sub-btn highlight" id="openSlabCustomizerBtn" style="width:100%; font-size:10px; padding:3px 6px; text-align:center;">⚙️ Customize All (Edges, Styles, Contours)</button>
                         </div>
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
                             <input type="checkbox" id="toggleLandscapeWash" ${this.plotManager.showLandscapeWash ? 'checked' : ''}>
@@ -2855,6 +3074,7 @@ export class HousePlannerApp {
                 });
                 document.getElementById('toggleSlabProjection')?.addEventListener('change', (e) => {
                     this.plotManager.showSlabProjection = e.target.checked;
+                    if (this.slabManager) this.slabManager.enabled = e.target.checked;
                     const d = document.getElementById('slabProjDetails');
                     if (d) d.style.display = e.target.checked ? 'flex' : 'none';
                     this.saveHistory();
@@ -2864,9 +3084,34 @@ export class HousePlannerApp {
                     const val = units.parseInput(e.target.value);
                     if (val !== null && val >= 0) {
                         this.plotManager.slabProjectionOffset = val;
+                        if (this.slabManager) this.slabManager.setUniformOffset(val);
                         this.saveHistory();
                         this.render();
                     }
+                });
+                document.getElementById('qSlabPresetStd')?.addEventListener('click', () => {
+                    if (this.slabManager) this.slabManager.applyPreset('standard');
+                    this.plotManager.showSlabProjection = true;
+                    this.plotManager.slabProjectionOffset = 18;
+                    this.saveHistory();
+                    this.updateInspector();
+                    this.render();
+                });
+                document.getElementById('qSlabPresetPortico')?.addEventListener('click', () => {
+                    if (this.slabManager) this.slabManager.applyPreset('portico');
+                    this.plotManager.showSlabProjection = true;
+                    this.saveHistory();
+                    this.updateInspector();
+                    this.render();
+                });
+                document.getElementById('openSlabCustomizerBtn')?.addEventListener('click', () => {
+                    if (this.slabManager) {
+                        this.slabManager.enabled = true;
+                        this.plotManager.showSlabProjection = true;
+                    }
+                    this.selectedCategory = 'slab';
+                    this.selectedObject = this.slabManager;
+                    this.updateInspector();
                 });
                 document.getElementById('toggleLandscapeWash')?.addEventListener('change', (e) => {
                     this.plotManager.showLandscapeWash = e.target.checked;
@@ -2874,6 +3119,384 @@ export class HousePlannerApp {
                     this.render();
                 });
             }
+
+            return;
+        }
+
+        // ==========================================
+        // ROOF SLAB & CANTILEVER PROJECTION SELECTED
+        // ==========================================
+        if (this.selectedCategory === 'slab') {
+            const slab = this.slabManager;
+            const off = slab.getEffectiveOffsets();
+            panel.innerHTML = `
+                <div class="inspector-section">
+                    <h3>Roof Slab & Cantilever Overhangs</h3>
+                    <p class="hint-text">RCC slab overhang, chajja & cantilever projection:</p>
+
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="slabEnableToggle" ${slab.enabled ? 'checked' : ''}>
+                            <span style="font-weight:600; color:var(--text-main);">Enable Slab Projection (Dotted Line)</span>
+                        </label>
+                    </div>
+
+                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">Architectural Presets:</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+                        <button class="sub-btn" id="slabPresetStd">1'-6" Standard</button>
+                        <button class="sub-btn" id="slabPresetPortico">4' Front Portico</button>
+                        <button class="sub-btn" id="slabPresetBalcony">5' Deep Balcony</button>
+                        <button class="sub-btn" id="slabPresetFlush">Flush (0" Offset)</button>
+                    </div>
+
+                    <div class="prop-row">
+                        <span class="prop-label">Envelope Mode</span>
+                        <select id="slabModeDropdown" class="prop-input" style="width:130px;">
+                            <option value="envelope" ${slab.mode === 'envelope' ? 'selected' : ''}>Adaptive Contour</option>
+                            <option value="bounds" ${slab.mode === 'bounds' ? 'selected' : ''}>Bounding Box</option>
+                        </select>
+                    </div>
+
+                    <div style="border-top:1px solid var(--border-color); margin:10px 0; padding-top:10px;">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-bottom:8px;">
+                            <input type="checkbox" id="slabUniformToggle" ${slab.isUniform ? 'checked' : ''}>
+                            <span>Uniform Overhang (All Sides Equal)</span>
+                        </label>
+
+                        ${slab.isUniform ? `
+                            <div class="prop-row">
+                                <span class="prop-label">All Edges</span>
+                                <div style="display:flex; gap:4px; align-items:center;">
+                                    <input type="text" id="slabUniformValInput" class="prop-input" value="${units.formatLength(slab.uniformOffset)}" style="width:72px;">
+                                    <button class="sub-btn" id="slabUniMinusBtn">-6"</button>
+                                    <button class="sub-btn" id="slabUniPlusBtn">+6"</button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="input-grid" style="margin-bottom:8px;">
+                                <div>
+                                    <label>Front (Cantilever)</label>
+                                    <input type="text" id="slabFrontValInput" value="${units.formatLength(off.front)}">
+                                </div>
+                                <div>
+                                    <label>Rear (Back Eave)</label>
+                                    <input type="text" id="slabRearValInput" value="${units.formatLength(off.rear)}">
+                                </div>
+                                <div>
+                                    <label>Left (Chajja 1)</label>
+                                    <input type="text" id="slabLeftValInput" value="${units.formatLength(off.left)}">
+                                </div>
+                                <div>
+                                    <label>Right (Chajja 2)</label>
+                                    <input type="text" id="slabRightValInput" value="${units.formatLength(off.right)}">
+                                </div>
+                            </div>
+                        `}
+                    </div>
+
+                    <div style="border-top:1px solid var(--border-color); margin:10px 0; padding-top:10px;">
+                        <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Line & Corner Detailing</h4>
+                        <div class="prop-row">
+                            <span class="prop-label">Line Pattern</span>
+                            <select id="slabPatternDropdown" class="prop-input" style="width:110px;">
+                                <option value="dashed" ${slab.pattern === 'dashed' ? 'selected' : ''}>Dashed (╌ ╌)</option>
+                                <option value="dotted" ${slab.pattern === 'dotted' ? 'selected' : ''}>Dotted (· ·)</option>
+                                <option value="dash_dot" ${slab.pattern === 'dash_dot' ? 'selected' : ''}>Dash-Dot (╌ ·)</option>
+                                <option value="solid" ${slab.pattern === 'solid' ? 'selected' : ''}>Solid (──)</option>
+                            </select>
+                        </div>
+                        <div class="prop-row">
+                            <span class="prop-label">Line Thickness</span>
+                            <select id="slabLineWidthDropdown" class="prop-input" style="width:110px;">
+                                <option value="1.0" ${slab.lineWidth === 1.0 ? 'selected' : ''}>1.0px (Fine)</option>
+                                <option value="1.4" ${slab.lineWidth === 1.4 ? 'selected' : ''}>1.4px (Standard)</option>
+                                <option value="2.2" ${slab.lineWidth === 2.2 ? 'selected' : ''}>2.2px (Bold)</option>
+                            </select>
+                        </div>
+                        <div class="prop-row">
+                            <span class="prop-label">Corner Style</span>
+                            <select id="slabCornerDropdown" class="prop-input" style="width:110px;">
+                                <option value="ticks" ${slab.cornerStyle === 'ticks' ? 'selected' : ''}>L-bracket Ticks</option>
+                                <option value="sharp" ${slab.cornerStyle === 'sharp' ? 'selected' : ''}>Sharp Miter (90°)</option>
+                                <option value="chamfer" ${slab.cornerStyle === 'chamfer' ? 'selected' : ''}>Chamfered (45°)</option>
+                            </select>
+                        </div>
+                        ${slab.cornerStyle === 'chamfer' ? `
+                            <div class="prop-row">
+                                <span class="prop-label">Chamfer Size</span>
+                                <input type="text" id="slabChamferDistInput" class="prop-input" value="${units.formatLength(slab.chamferDist || 6)}" style="width:72px;">
+                            </div>
+                        ` : ''}
+                        <div class="prop-row">
+                            <span class="prop-label">Line Color</span>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <button class="sub-btn" data-slab-col="#38bdf8" style="padding:2px 6px; color:#38bdf8;">Cyan</button>
+                                <button class="sub-btn" data-slab-col="#0284c7" style="padding:2px 6px; color:#0284c7;">CAD Blue</button>
+                                <button class="sub-btn" data-slab-col="#eab308" style="padding:2px 6px; color:#eab308;">Yellow</button>
+                                <button class="sub-btn" data-slab-col="#ffffff" style="padding:2px 6px; color:#ffffff;">White</button>
+                                <input type="color" id="slabColorPicker" value="${slab.lineColor || '#38bdf8'}" style="width:24px; height:24px; padding:0; border:none; background:transparent; cursor:pointer;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="border-top:1px solid var(--border-color); margin:10px 0; padding-top:10px; display:flex; flex-direction:column; gap:6px;">
+                        <h4 style="margin:0 0 6px 0; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Shading & Visual Fills</h4>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="slabFillCheck" ${slab.fillEnabled ? 'checked' : ''}>
+                            <span>Subtle Shading Tint (Slab Wash)</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="slabHatchCheck" ${slab.showHatch ? 'checked' : ''}>
+                            <span>Architectural Hatch (45° RCC Lines)</span>
+                        </label>
+                    </div>
+
+                    <div style="border-top:1px solid var(--border-color); margin:10px 0; padding-top:10px; display:flex; flex-direction:column; gap:6px;">
+                        <h4 style="margin:0 0 6px 0; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Annotations & Callouts</h4>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="slabDimsCheck" ${slab.showDimensions ? 'checked' : ''}>
+                            <span>Show Overhang Dimensions (e.g. ↕ 4'-0")</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="slabBannerCheck" ${slab.showLabel ? 'checked' : ''}>
+                            <span>Show Annotation Text Banner</span>
+                        </label>
+                        <div id="slabBannerDetails" style="display:${slab.showLabel ? 'flex' : 'none'}; flex-direction:column; gap:6px; padding-left:20px;">
+                            <div class="prop-row" style="margin-bottom:4px;">
+                                <span class="prop-label">Custom Text</span>
+                                <input type="text" id="slabLabelTextInput" class="prop-input" value="${slab.labelText || ''}" placeholder="Leave blank for auto" style="width:130px;">
+                            </div>
+                            <div class="prop-row">
+                                <span class="prop-label">Position</span>
+                                <select id="slabLabelPosSelect" class="prop-input" style="width:110px;">
+                                    <option value="front" ${slab.labelPosition === 'front' ? 'selected' : ''}>Bottom (Front)</option>
+                                    <option value="rear" ${slab.labelPosition === 'rear' ? 'selected' : ''}>Top (Rear)</option>
+                                    <option value="center" ${slab.labelPosition === 'center' ? 'selected' : ''}>Center</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:12px; padding:8px; background:rgba(56, 189, 248, 0.08); border:1px solid rgba(56, 189, 248, 0.25); border-radius:6px; font-size:11px; color:#38bdf8;">
+                        💡 <b>Canvas Interactive Handles:</b> Drag the 4 glowing edge handles (↕ / ↔) directly on canvas to stretch overhangs visually with live measurements!
+                    </div>
+
+                    <button class="action-btn danger" id="slabHideBtn" style="margin-top:12px; width:100%;">Hide Roof Slab</button>
+                </div>
+            `;
+
+            // Event Listeners for Slab Inspector
+            document.getElementById('slabEnableToggle')?.addEventListener('change', (e) => {
+                slab.enabled = e.target.checked;
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabPresetStd')?.addEventListener('click', () => {
+                slab.applyPreset('standard');
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabPresetPortico')?.addEventListener('click', () => {
+                slab.applyPreset('portico');
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabPresetBalcony')?.addEventListener('click', () => {
+                slab.applyPreset('balcony');
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabPresetFlush')?.addEventListener('click', () => {
+                slab.applyPreset('flush');
+                this.plotManager.showSlabProjection = slab.enabled;
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabModeDropdown')?.addEventListener('change', (e) => {
+                slab.mode = e.target.value;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabUniformToggle')?.addEventListener('change', (e) => {
+                slab.isUniform = e.target.checked;
+                if (slab.isUniform) {
+                    slab.setUniformOffset(slab.uniformOffset);
+                }
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabUniformValInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val >= 0) {
+                    slab.setUniformOffset(val);
+                    this.plotManager.slabProjectionOffset = val;
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            document.getElementById('slabUniMinusBtn')?.addEventListener('click', () => {
+                slab.setUniformOffset(Math.max(0, slab.uniformOffset - 6));
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabUniPlusBtn')?.addEventListener('click', () => {
+                slab.setUniformOffset(slab.uniformOffset + 6);
+                this.plotManager.slabProjectionOffset = slab.uniformOffset;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabFrontValInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val >= 0) {
+                    slab.setEdgeOffset('front', val);
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            document.getElementById('slabRearValInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val >= 0) {
+                    slab.setEdgeOffset('rear', val);
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            document.getElementById('slabLeftValInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val >= 0) {
+                    slab.setEdgeOffset('left', val);
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            document.getElementById('slabRightValInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val >= 0) {
+                    slab.setEdgeOffset('right', val);
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            document.getElementById('slabPatternDropdown')?.addEventListener('change', (e) => {
+                slab.pattern = e.target.value;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabLineWidthDropdown')?.addEventListener('change', (e) => {
+                slab.lineWidth = parseFloat(e.target.value);
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabCornerDropdown')?.addEventListener('change', (e) => {
+                slab.cornerStyle = e.target.value;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+
+            document.getElementById('slabChamferDistInput')?.addEventListener('change', (e) => {
+                const val = units.parseInput(e.target.value);
+                if (val !== null && val > 0) {
+                    slab.chamferDist = val;
+                    this.saveHistory();
+                    this.render();
+                }
+            });
+
+            panel.querySelectorAll('button[data-slab-col]').forEach(b => {
+                b.onclick = () => {
+                    slab.lineColor = b.dataset.slabCol;
+                    const p = document.getElementById('slabColorPicker');
+                    if (p) p.value = slab.lineColor;
+                    this.saveHistory();
+                    this.render();
+                };
+            });
+
+            document.getElementById('slabColorPicker')?.addEventListener('input', (e) => {
+                slab.lineColor = e.target.value;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabFillCheck')?.addEventListener('change', (e) => {
+                slab.fillEnabled = e.target.checked;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabHatchCheck')?.addEventListener('change', (e) => {
+                slab.showHatch = e.target.checked;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabDimsCheck')?.addEventListener('change', (e) => {
+                slab.showDimensions = e.target.checked;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabBannerCheck')?.addEventListener('change', (e) => {
+                slab.showLabel = e.target.checked;
+                const d = document.getElementById('slabBannerDetails');
+                if (d) d.style.display = e.target.checked ? 'flex' : 'none';
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabLabelTextInput')?.addEventListener('input', (e) => {
+                slab.labelText = e.target.value;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabLabelPosSelect')?.addEventListener('change', (e) => {
+                slab.labelPosition = e.target.value;
+                this.saveHistory();
+                this.render();
+            });
+
+            document.getElementById('slabHideBtn')?.addEventListener('click', () => {
+                slab.enabled = false;
+                this.plotManager.showSlabProjection = false;
+                this.clearSelection();
+                this.saveHistory();
+                this.render();
+            });
 
             return;
         }
@@ -4093,12 +4716,19 @@ export class HousePlannerApp {
                                 <span>Buildable Envelope Shading</span>
                             </label>
                             <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
-                                <input type="checkbox" id="plotSlabProjectionCheck" ${this.plotManager.showSlabProjection ? 'checked' : ''}>
-                                <span>Roof Slab Line (Dotted Line)</span>
+                                <input type="checkbox" id="plotSlabProjectionCheck" ${(this.slabManager && this.slabManager.enabled) || this.plotManager.showSlabProjection ? 'checked' : ''}>
+                                <span style="font-weight:600;">Roof Slab Line (Overhang / Chajja)</span>
                             </label>
-                            <div id="plotSlabProjDetails" style="display:${this.plotManager.showSlabProjection ? 'flex' : 'none'}; align-items:center; justify-content:space-between; padding-left:22px; font-size:11px;">
-                                <span style="color:var(--text-secondary);">Slab Overhang:</span>
-                                <input type="text" id="plotSlabProjOffsetInput" value="${units.formatLength(this.plotManager.slabProjectionOffset || 18)}" style="width:80px; padding:2px 6px; font-size:11px; background:var(--bg-panel); border:1px solid var(--border-color); color:var(--text-main); border-radius:4px;">
+                            <div id="plotSlabProjDetails" style="display:${((this.slabManager && this.slabManager.enabled) || this.plotManager.showSlabProjection) ? 'flex' : 'none'}; flex-direction:column; gap:6px; padding-left:22px; font-size:11px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between;">
+                                    <span style="color:var(--text-secondary);">Slab Overhang:</span>
+                                    <input type="text" id="plotSlabProjOffsetInput" value="${units.formatLength(this.slabManager ? this.slabManager.uniformOffset : (this.plotManager.slabProjectionOffset || 18))}" style="width:80px; padding:2px 6px; font-size:11px; background:var(--bg-panel); border:1px solid var(--border-color); color:var(--text-main); border-radius:4px;">
+                                </div>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+                                    <button class="sub-btn" id="plotSlabStdBtn" style="font-size:10px; padding:2px 4px;">1'-6" Std</button>
+                                    <button class="sub-btn" id="plotSlabPorticoBtn" style="font-size:10px; padding:2px 4px;">4' Portico</button>
+                                </div>
+                                <button class="sub-btn highlight" id="plotOpenSlabSettingsBtn" style="width:100%; font-size:10px; padding:3px 6px; text-align:center;">⚙️ Customize All (Edges, Styles, Contours)</button>
                             </div>
                             <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
                                 <input type="checkbox" id="plotLandscapeWashCheck" ${this.plotManager.showLandscapeWash ? 'checked' : ''}>
@@ -4198,6 +4828,7 @@ export class HousePlannerApp {
             });
             document.getElementById('plotSlabProjectionCheck')?.addEventListener('change', (e) => {
                 this.plotManager.showSlabProjection = e.target.checked;
+                if (this.slabManager) this.slabManager.enabled = e.target.checked;
                 const d = document.getElementById('plotSlabProjDetails');
                 if (d) d.style.display = e.target.checked ? 'flex' : 'none';
                 this.saveHistory();
@@ -4207,9 +4838,34 @@ export class HousePlannerApp {
                 const val = units.parseInput(e.target.value);
                 if (val !== null && val >= 0) {
                     this.plotManager.slabProjectionOffset = val;
+                    if (this.slabManager) this.slabManager.setUniformOffset(val);
                     this.saveHistory();
                     this.render();
                 }
+            });
+            document.getElementById('plotSlabStdBtn')?.addEventListener('click', () => {
+                if (this.slabManager) this.slabManager.applyPreset('standard');
+                this.plotManager.showSlabProjection = true;
+                this.plotManager.slabProjectionOffset = 18;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+            document.getElementById('plotSlabPorticoBtn')?.addEventListener('click', () => {
+                if (this.slabManager) this.slabManager.applyPreset('portico');
+                this.plotManager.showSlabProjection = true;
+                this.saveHistory();
+                this.updateInspector();
+                this.render();
+            });
+            document.getElementById('plotOpenSlabSettingsBtn')?.addEventListener('click', () => {
+                if (this.slabManager) {
+                    this.slabManager.enabled = true;
+                    this.plotManager.showSlabProjection = true;
+                }
+                this.selectedCategory = 'slab';
+                this.selectedObject = this.slabManager;
+                this.updateInspector();
             });
             document.getElementById('plotLandscapeWashCheck')?.addEventListener('change', (e) => {
                 this.plotManager.showLandscapeWash = e.target.checked;

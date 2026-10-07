@@ -240,8 +240,13 @@ export class PlotManager {
         }
 
         // 5. Roof / Cantilever Slab Markings (Dotted Line)
-        if (this.showSlabProjection) {
-            this.renderSlabProjection(ctx, scale, wallManager, isClean, isExport);
+        if (this.showSlabProjection || (this.slabManager && this.slabManager.enabled)) {
+            const isSlabSelected = !!(this.slabManager && (this.slabManager.isSelected || (this.app && (this.app.selectedCategory === 'slab' || this.app.activeTool === 'slab'))));
+            if (this.slabManager) {
+                this.slabManager.render(ctx, scale, isSlabSelected, wallManager, isClean, isExport);
+            } else {
+                this.renderSlabProjection(ctx, scale, wallManager, isClean, isExport);
+            }
         }
 
         // 6. North Compass (interactive)

@@ -213,6 +213,10 @@ export class FloorManager {
             offset: d.offset,
             customText: d.customText || d.text
         }));
+
+        if (this.app.slabManager) {
+            floor.slabConfig = this.app.slabManager.serialize();
+        }
     }
 
     /**
@@ -298,6 +302,15 @@ export class FloorManager {
             if (startPt && endPt && typeof startPt.x === 'number' && typeof endPt.x === 'number') {
                 const dim = this.app.dimensionManager.addDimension(startPt, endPt, d.offset, d.customText || d.text);
                 if (dim) dim.id = d.id;
+            }
+        }
+
+        // Slab Configuration
+        if (floor.slabConfig && this.app.slabManager) {
+            this.app.slabManager.deserialize(floor.slabConfig);
+            if (this.app.plotManager) {
+                this.app.plotManager.showSlabProjection = this.app.slabManager.enabled;
+                this.app.plotManager.slabProjectionOffset = this.app.slabManager.uniformOffset;
             }
         }
     }

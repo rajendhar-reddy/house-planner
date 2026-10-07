@@ -448,6 +448,28 @@ export class Exporter {
             svg += `</g>\n`;
         }
 
+        // 5. Roof Slab Projection Layer
+        const slabMgr = projectState.slabManager;
+        if (slabMgr && slabMgr.enabled) {
+            const poly = slabMgr.getSlabPolygon(projectState.wallManager, projectState.plotManager);
+            if (poly && poly.length >= 3) {
+                const polyStr = poly.map(p => `${p.x},${p.y}`).join(' ');
+                const dashArray = slabMgr.pattern === 'dotted' ? '4,4' : (slabMgr.pattern === 'dash_dot' ? '10,4,2,4' : (slabMgr.pattern === 'solid' ? 'none' : '8,6'));
+                const strokeCol = slabMgr.lineColor || '#0284c7';
+                const fillCol = slabMgr.fillEnabled ? (slabMgr.fillColor || 'rgba(56, 189, 248, 0.05)') : 'none';
+                svg += `<g id="slab-projection">\n`;
+                svg += `  <polygon points="${polyStr}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="${slabMgr.lineWidth || 1.5}" stroke-dasharray="${dashArray}" />\n`;
+                if (slabMgr.showLabel) {
+                    const bounds = slabMgr.getPolygonBounds(poly);
+                    if (bounds) {
+                        const lbl = slabMgr.labelText || 'ROOF SLAB PROJECTION';
+                        svg += `  <text x="${bounds.x + bounds.width / 2}" y="${bounds.y + bounds.height + 12}" font-family="sans-serif" font-size="9" font-weight="bold" fill="${strokeCol}" text-anchor="middle">${lbl}</text>\n`;
+                    }
+                }
+                svg += `</g>\n`;
+            }
+        }
+
         svg += `</svg>`;
 
         const blob = new Blob([svg], { type: 'image/svg+xml' });
@@ -465,8 +487,8 @@ export class Exporter {
         dxf += '0\nENDSEC\n';
 
         // Tables: Layers
-        dxf += '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n8\n';
-        const layers = ['ROADS', 'PLOT', 'COLUMNS', 'STAIRS', 'WALLS_EXTERIOR', 'WALLS_INTERIOR', 'WALLS_COMPOUND', 'DOORS', 'WINDOWS', 'GATES', 'LANDSCAPE', 'FURNITURE', 'DIMENSIONS'];
+        dxf += '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n9\n';
+        const layers = ['ROADS', 'PLOT', 'SLAB_PROJECTION', 'COLUMNS', 'STAIRS', 'WALLS_EXTERIOR', 'WALLS_INTERIOR', 'WALLS_COMPOUND', 'DOORS', 'WINDOWS', 'GATES', 'LANDSCAPE', 'FURNITURE', 'DIMENSIONS'];
         for (const lyr of layers) {
             dxf += '0\nLAYER\n2\n' + lyr + '\n70\n0\n62\n7\n6\nCONTINUOUS\n';
         }
@@ -589,6 +611,19 @@ export class Exporter {
                 const geom = dim.getGeometry();
                 if (geom) {
                     dxf += `0\nLINE\n8\nDIMENSIONS\n10\n${geom.p1.x}\n20\n${-geom.p1.y}\n30\n0.0\n11\n${geom.p2.x}\n21\n${-geom.p2.y}\n31\n0.0\n`;
+                }
+            }
+        }
+
+        // Roof Slab Projection
+        const slabMgrDXF = projectState.slabManager;
+        if (slabMgrDXF && slabMgrDXF.enabled) {
+            const poly = slabMgrDXF.getSlabPolygon(projectState.wallManager, projectState.plotManager);
+            if (poly && poly.length >= 3) {
+                for (let i = 0; i < poly.length; i++) {
+                    const p1 = poly[i];
+                    const p2 = poly[(i + 1) % poly.length];
+                    dxf += `0\nLINE\n8\nSLAB_PROJECTION\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
                 }
             }
         }
