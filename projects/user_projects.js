@@ -798,7 +798,7 @@ export const USER_SAVED_PROJECTS = {
         "tagStyle": "clean"
       },
       {
-        "id": "room_5",
+        "id": "room_32",
         "x": 245.00353543369067,
         "y": 170.28018895851176,
         "name": "Dressing",

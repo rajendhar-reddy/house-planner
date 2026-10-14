@@ -86,59 +86,68 @@ class UnitManager {
     }
 
     /**
-     * Parse text input into internal inches
-     * e.g. "30'", "30 ft", "12' 6\"", "25.5", "10m", "230mm", "400cm"
-     * @param {string} text 
+     * Parse text input into internal inches. Returns null when the text is not a
+     * clear measurement (it never guesses: "10abc" or "5'6\"x" are rejected rather
+     * than silently read as 10 ft / 5 ft).
+     *
+     * Accepted: 30'  30 ft  12' 6"  12'6  12'-6"  12 ft 6 in  3 feet 4 inches
+     *           36"  36 in  6 inches  6 1/2"  1/2"  .5"
+     *           10m  2.5 meters  1,5m  230mm  400cm
+     *           25.5 (plain number = feet in imperial mode, metres in metric mode)
+     * A leading "-" makes the value negative.
+     * @param {string} text
      * @returns {number|null} inches
      */
     parseInput(text) {
         if (!text || typeof text !== 'string') return null;
-        const s = text.trim().toLowerCase();
+        let s = text.trim().toLowerCase();
         if (!s) return null;
 
-        // Check for metric mm
-        if (s.endsWith('mm')) {
-            const val = parseFloat(s.replace('mm', '').trim());
-            return isNaN(val) ? null : val / 25.4;
-        }
-        // Check for metric cm
-        if (s.endsWith('cm')) {
-            const val = parseFloat(s.replace('cm', '').trim());
-            return isNaN(val) ? null : (val * 10) / 25.4;
-        }
-        // Check for metric m
-        if (s.endsWith('m') && !s.endsWith('mm')) {
-            const val = parseFloat(s.replace('m', '').trim());
-            return isNaN(val) ? null : (val * 1000) / 25.4;
-        }
+        // Normalise typographic marks, decimal commas and spacing
+        s = s.replace(/[\u2032\u2019\u2018]/g, "'").replace(/[\u2033\u201d\u201c]/g, '"').replace(/''/g, '"')
+             .replace(/(\d),(\d)/g, '$1.$2').replace(/\s+/g, ' ');
 
-        // Check for feet and inches format: e.g. 12' 6", 12'6", 12ft 6in
-        const ftInRegex = /^(\d+(?:\.\d+)?)\s*(?:'|ft)\s*(?:-?\s*(\d+(?:\.\d+)?)\s*(?:"|in)?)?$/;
-        const match = s.match(ftInRegex);
-        if (match) {
-            const feet = parseFloat(match[1]);
-            const inches = match[2] ? parseFloat(match[2]) : 0;
-            return (feet * 12) + inches;
-        }
+        let sign = 1;
+        if (s.startsWith('-')) { sign = -1; s = s.slice(1).trim(); }
 
-        // Check for plain inches: e.g. 36", 36 in
-        const inRegex = /^(\d+(?:\.\d+)?)\s*(?:"|in)$/;
-        const inMatch = s.match(inRegex);
-        if (inMatch) {
-            return parseFloat(inMatch[1]);
-        }
+        // number: 6, 6.5, .5, 1/2 or a mixed fraction like 6 1/2
+        const NUM = '(\\d+(?:\\.\\d+)?(?:\\s+\\d+/\\d+)?|\\d+/\\d+|\\.\\d+)';
+        const toNum = (str) => {
+            let total = 0;
+            for (const part of str.trim().split(' ')) {
+                if (part.includes('/')) {
+                    const [n, d] = part.split('/').map(Number);
+                    if (!d) return NaN;
+                    total += n / d;
+                } else {
+                    total += parseFloat(part);
+                }
+            }
+            return total;
+        };
+        const FT = "(?:'|ft|feet|foot)";
+        const IN = '(?:"|in|inch|inches)';
+        const re = (body) => new RegExp('^' + body + '$');
+        const done = (inches) => (Number.isFinite(inches) ? sign * inches : null);
 
-        // Plain number: interpret according to current system
-        const num = parseFloat(s);
-        if (isNaN(num)) return null;
+        let m;
+        if ((m = s.match(re(NUM + '\\s*(?:mm|millimet(?:er|re)s?)')))) return done(toNum(m[1]) / 25.4);
+        if ((m = s.match(re(NUM + '\\s*(?:cm|centimet(?:er|re)s?)')))) return done(toNum(m[1]) * 10 / 25.4);
+        if ((m = s.match(re(NUM + '\\s*(?:m|met(?:er|re)s?)')))) return done(toNum(m[1]) * 1000 / 25.4);
 
-        if (this.system === UnitSystem.IMPERIAL) {
-            // Assume feet for typed dimension (e.g. "30" means 30 feet)
-            return num * 12;
-        } else {
-            // In metric, default typed "10" means 10 meters
-            return (num * 1000) / 25.4;
+        // feet, optionally followed by inches: 12' 6"  12'6  12 ft 6 in
+        if ((m = s.match(re(NUM + '\\s*' + FT + '(?:\\s*-?\\s*' + NUM + '\\s*' + IN + '?)?')))) {
+            return done(toNum(m[1]) * 12 + (m[2] ? toNum(m[2]) : 0));
         }
+        // inches only: 36"  36 in  6 inches
+        if ((m = s.match(re(NUM + '\\s*' + IN)))) return done(toNum(m[1]));
+
+        // Plain number: interpreted according to the current unit system
+        if ((m = s.match(re(NUM)))) {
+            const num = toNum(m[1]);
+            return done(this.system === UnitSystem.IMPERIAL ? num * 12 : (num * 1000) / 25.4);
+        }
+        return null;
     }
 }
 

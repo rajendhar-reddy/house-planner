@@ -1,0 +1,11 @@
+{
+  "name": "house-planner-cad",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "2D house planner CAD (zero runtime dependencies)",
+  "scripts": {
+    "start": "python run.py",
+    "test": "node --test"
+  }
+}

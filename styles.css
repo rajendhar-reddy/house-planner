@@ -1086,3 +1086,47 @@ input[type="range"] {
         height: auto !important;
     }
 }
+
+
+/* ---------- Command line ---------- */
+.command-bar {
+    background: var(--bg-panel, #0f172a);
+    border-top: 1px solid var(--border-color, #334155);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 4px 10px 6px;
+}
+.cmd-log { max-height: 66px; overflow-y: auto; color: var(--text-muted, #94a3b8); line-height: 1.45; }
+.cmd-line.cmd-echo { color: #cbd5e1; }
+.cmd-line.cmd-error { color: #f87171; }
+.cmd-line.cmd-info { color: #94a3b8; }
+.cmd-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.cmd-prompt { color: #38bdf8; white-space: nowrap; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+#cmdInput {
+    flex: 1; background: transparent; border: none; outline: none; color: #f8fafc;
+    font: inherit; padding: 2px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+#cmdInput:focus { border-bottom-color: #38bdf8; }
+@media (max-width: 760px) { .cmd-log { max-height: 36px; } }
+@media print { .command-bar { display: none; } }
+
+/* ---------- Desktop toolbar: wrap onto extra rows instead of hiding buttons off-screen ---------- */
+@media (min-width: 1025px) {
+    .top-navbar {
+        height: auto;
+        min-height: 52px;
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+    .brand-section { flex: 0 0 auto; }
+    .navbar-center, .navbar-right {
+        flex-wrap: wrap;
+        row-gap: 6px;
+    }
+    /* the two button groups share the row with the brand and wrap inside themselves when space runs out */
+    .navbar-center { flex: 1 1 540px; justify-content: center; }
+    .navbar-right { flex: 1 1 460px; justify-content: flex-end; }
+    .nav-btn { white-space: nowrap; }
+}

@@ -3,6 +3,21 @@
  * Zero external dependencies. Generates print-ready A4, A3, A2, and Custom Fit PDF blueprints.
  */
 
+/**
+ * Encode a value as a PDF text string. Plain printable ASCII becomes a literal string with
+ * the special characters escaped; anything else becomes UTF-16BE with a byte-order mark (the
+ * encoding PDF viewers expect for non-Latin titles/authors).
+ */
+export function pdfTextString(value) {
+    const s = String(value === null || value === undefined ? '' : value).replace(/[\r\n\t]+/g, ' ');
+    if (/^[\x20-\x7E]*$/.test(s)) {
+        return '(' + s.replace(/([\\()])/g, '\\$1') + ')';
+    }
+    let hex = 'FEFF';
+    for (let i = 0; i < s.length; i++) hex += s.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
+    return '<' + hex + '>';
+}
+
 export class PDFWriter {
     /**
      * Standard Paper Sizes in PostScript Points (72 points = 1 inch)
@@ -31,7 +46,9 @@ export class PDFWriter {
 
         // Paper dimensions
         let pageW, pageH;
-        if (paper === 'fit') {
+        if (options.pageSizePt) {                                   // an exact page (print-to-scale sheets)
+            pageW = options.pageSizePt.w; pageH = options.pageSizePt.h;
+        } else if (paper === 'fit') {
             const aspect = canvas.width / canvas.height;
             if (aspect >= 1) {
                 pageW = 841.89;
@@ -67,7 +84,8 @@ export class PDFWriter {
             title,
             client,
             author,
-            drawBorder: options.drawBorder !== false
+            drawBorder: options.drawBorder !== false && !options.fullPage,
+            fullPage: !!options.fullPage
         });
     }
 
@@ -75,7 +93,7 @@ export class PDFWriter {
      * Build binary ISO PDF-1.4 with DCTDecode image XObject and strict 20-byte xref table
      */
     static buildPDFDocument(jpegBytes, imgW, imgH, pageW, pageH, meta = {}) {
-        const margin = 20.0; // 20 pt (~7mm) standard margin
+        const margin = meta.fullPage ? 0 : 20.0; // 20 pt (~7mm) standard margin; none when the image IS the page
         const availW = pageW - margin * 2;
         const availH = pageH - margin * 2;
 
@@ -154,11 +172,11 @@ export class PDFWriter {
         // Obj 6: Info metadata
         const now = new Date();
         const dateStr = `D:${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-        const cleanTitle = (meta.title || 'Architectural Floor Plan').replace(/[()\\\/]/g, ' ');
-        const cleanClient = (meta.client || 'Residential Building').replace(/[()\\\/]/g, ' ');
-        const cleanAuthor = (meta.author || 'HousePlanner CAD').replace(/[()\\\/]/g, ' ');
+        const title = pdfTextString(meta.title || 'Architectural Floor Plan');
+        const subject = pdfTextString(meta.client || 'Residential Building');
+        const author = pdfTextString(meta.author || 'HousePlanner CAD');
 
-        addObj(`<< /Title (${cleanTitle}) /Subject (${cleanClient}) /Author (${cleanAuthor}) /Creator (HousePlanner CAD 2D Arch) /Producer (HousePlanner CAD Architectural PDF Engine) /CreationDate (${dateStr}) >>`);
+        addObj(`<< /Title ${title} /Subject ${subject} /Author ${author} /Creator (HousePlanner CAD 2D Arch) /Producer (HousePlanner CAD Architectural PDF Engine) /CreationDate (${dateStr}) >>`);
 
         // Strict 20-byte Cross-Reference Table
         const xrefPos = currentPos;

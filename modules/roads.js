@@ -3,8 +3,9 @@
  */
 
 import { units } from './units.js';
+import { nextId } from './ids.js';
 
-let roadIdCounter = 1;
+
 
 export const ROAD_PRESETS = [
     { name: '20 ft Residential Street', width: 240 }, // 20 feet
@@ -16,7 +17,7 @@ export const ROAD_PRESETS = [
 
 export class Road {
     constructor(options = {}) {
-        this.id = `road_${roadIdCounter++}`;
+        this.id = nextId('road');
         this.side = options.side || 'front'; // 'front' | 'rear' | 'left' | 'right' | 'custom'
         this.width = options.width || 360;   // 30 ft default
         this.name = options.name || `${units.formatLength(this.width)} Wide Road`;

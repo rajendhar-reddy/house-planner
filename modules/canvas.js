@@ -3,6 +3,7 @@
  */
 
 import { units, UnitSystem } from './units.js';
+import { computeSnap, DEFAULT_SNAP_MODES } from './snap.js';
 
 export class CanvasEngine {
     constructor(canvasElement) {
@@ -19,7 +20,11 @@ export class CanvasEngine {
         this.snapToGrid = true;
         this.snapToPoints = true;
         this.orthoMode = false; // toggle or Shift key
-        this.gridInterval = 12; // 12 inches (1 ft) default
+        // Object snaps (like AutoCAD OSNAP) and polar tracking
+        this.snapModes = { ...DEFAULT_SNAP_MODES };
+        this.polarMode = false;        // snap the direction to multiples of polarIncrement when close to one
+        this.polarIncrement = 45;      // degrees
+        this.segmentProvider = null;   // () => [{ a, b }] lines for intersection / perpendicular / nearest snaps
 
         // Dynamic snap indicators
         this.activeSnap = null; // { x, y, type: 'endpoint'|'midpoint'|'grid'|'intersection' }
@@ -56,8 +61,14 @@ export class CanvasEngine {
 
     setupEvents() {
         // Keyboard spacebar for temporary pan
+        const isTypingTarget = (el) => !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ||
+            el.tagName === 'SELECT' || el.isContentEditable);
+
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !this.isSpacePressed && e.target.tagName !== 'INPUT') {
+            if (e.code !== 'Space' || isTypingTarget(e.target)) return;
+            // Space is "hold to pan": stop it from scrolling the page or "clicking" a focused button.
+            e.preventDefault();
+            if (!this.isSpacePressed) {
                 this.isSpacePressed = true;
                 this.canvas.style.cursor = 'grab';
             }
@@ -73,6 +84,7 @@ export class CanvasEngine {
         // Mouse wheel zoom
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
+            if (this.onBeforeViewChange) this.onBeforeViewChange();
             const rect = this.canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -169,75 +181,46 @@ export class CanvasEngine {
     }
 
     /**
-     * Compute magnetic snapping point for input cursor
+     * Grid spacing in world inches for the active unit system.
+     * Imperial: 1 ft minor / 5 ft major.  Metric: 0.5 m minor / 1 m major.
+     * With `lod` the minor step is coarsened when zoomed far out (drawing only).
+     * `ratio` is the exact (integer) number of minor cells per major cell.
+     */
+    getGridSteps(lod = false) {
+        let minor = 12;  // 1 foot
+        let major = 60;  // 5 feet
+        if (units.getSystem() === UnitSystem.METRIC) {
+            minor = 19.685; // 0.5 m
+            major = 39.37;  // 1.0 m
+        }
+        const ratio = Math.max(1, Math.round(major / minor));
+        if (lod && minor * this.scale < 8) minor *= 5;
+        return { minor, major: minor * ratio, ratio };
+    }
+
+    /** Plain nearest-grid-point (no magnet radius), in the active unit system. */
+    getGridSnap(x, y) {
+        const g = this.getGridSteps().minor;
+        return { x: Math.round(x / g) * g, y: Math.round(y / g) * g };
+    }
+
+    /**
+     * Compute the snapped cursor position (see modules/snap.js for the rules).
+     * Updates activeSnap / orthoGuide, which the overlay uses to draw the snap marker and direction guide.
      */
     getSnapPoint(rawWorldX, rawWorldY, snapTargets = [], basePoint = null, forceOrtho = false) {
-        let x = rawWorldX;
-        let y = rawWorldY;
-        this.activeSnap = null;
-        this.orthoGuide = null;
-
-        // 1. Orthogonal lock if requested or Shift is held
-        if ((this.orthoMode || forceOrtho) && basePoint) {
-            const dx = x - basePoint.x;
-            const dy = y - basePoint.y;
-            const angle = Math.atan2(dy, dx);
-            const dist = Math.hypot(dx, dy);
-
-            // Snap to nearest 45-degree increment (0, 45, 90, 135, 180, -45, -90, etc.)
-            const snapAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-            x = basePoint.x + Math.cos(snapAngle) * dist;
-            y = basePoint.y + Math.sin(snapAngle) * dist;
-
-            this.orthoGuide = {
-                x1: basePoint.x,
-                y1: basePoint.y,
-                x2: x,
-                y2: y,
-                angle: (snapAngle * 180 / Math.PI + 360) % 360
-            };
-        }
-
-        // Magnetic radius in world units (generous radius for touchscreens)
         const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        const magnetRadius = (isTouch ? 24 : 16) / this.scale;
-
-        // 2. Snap to geometry points (endpoints, midpoints, corners)
-        if (this.snapToPoints && snapTargets.length > 0) {
-            let closestDist = magnetRadius;
-            let bestSnap = null;
-
-            for (const target of snapTargets) {
-                const d = Math.hypot(target.x - x, target.y - y);
-                if (d < closestDist) {
-                    closestDist = d;
-                    bestSnap = target;
-                }
-            }
-
-            if (bestSnap) {
-                this.activeSnap = {
-                    x: bestSnap.x,
-                    y: bestSnap.y,
-                    type: bestSnap.type || 'endpoint'
-                };
-                return { x: bestSnap.x, y: bestSnap.y, snapped: true };
-            }
-        }
-
-        // 3. Snap to grid
-        if (this.snapToGrid && this.gridInterval > 0) {
-            const gx = Math.round(x / this.gridInterval) * this.gridInterval;
-            const gy = Math.round(y / this.gridInterval) * this.gridInterval;
-            const d = Math.hypot(gx - x, gy - y);
-
-            if (d < magnetRadius) {
-                this.activeSnap = { x: gx, y: gy, type: 'grid' };
-                return { x: gx, y: gy, snapped: true };
-            }
-        }
-
-        return { x, y, snapped: false };
+        const r = computeSnap({
+            x: rawWorldX, y: rawWorldY, targets: snapTargets, basePoint, forceOrtho,
+            segments: this.segmentProvider ? this.segmentProvider() : [],
+            radius: (isTouch ? 24 : 16) / this.scale,              // magnet radius in world units (generous on touch screens)
+            gridStep: this.getGridSteps().minor,
+            settings: { orthoMode: this.orthoMode, polarMode: this.polarMode, polarIncrement: this.polarIncrement,
+                        snapToGrid: this.snapToGrid, snapToPoints: this.snapToPoints, snapModes: this.snapModes }
+        });
+        this.activeSnap = r.snap;
+        this.orthoGuide = r.guide;
+        return { x: r.x, y: r.y, snapped: r.snapped };
     }
 
     /**
@@ -279,63 +262,48 @@ export class CanvasEngine {
         const topLeft = this.screenToWorld(0, 0);
         const bottomRight = this.screenToWorld(width, height);
 
-        // Grid interval selection based on unit system and zoom scale
-        let minorStep = 12; // 1 foot (12 inches)
-        let majorStep = 60; // 5 feet (60 inches)
-
-        if (units.getSystem() === UnitSystem.METRIC) {
-            minorStep = 19.685; // 0.5 meter in inches
-            majorStep = 39.37;  // 1.0 meter in inches
-        }
-
-        // Scale-dependent LOD for grid lines
-        const pixelStep = minorStep * this.scale;
-        if (pixelStep < 8) {
-            minorStep *= 5;
-            majorStep *= 5;
-        }
+        const { minor: minorStep, major: majorStep, ratio } = this.getGridSteps(true);
 
         const isDark = theme === 'blueprint' || theme === 'dark';
         const minorColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.05)';
         const majorColor = isDark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(0, 0, 0, 0.12)';
         const axisColor = isDark ? 'rgba(56, 189, 248, 0.4)' : 'rgba(0, 0, 0, 0.35)';
 
-        const startX = Math.floor(topLeft.x / minorStep) * minorStep;
-        const endX = Math.ceil(bottomRight.x / minorStep) * minorStep;
-        const startY = Math.floor(topLeft.y / minorStep) * minorStep;
-        const endY = Math.ceil(bottomRight.y / minorStep) * minorStep;
+        // Lines come from integer indices (i * step) so floating-point steps (metric)
+        // never drift and major/minor classification is exact.
+        const ctx = this.ctx;
+        const iMinX = Math.floor(topLeft.x / minorStep), iMaxX = Math.ceil(bottomRight.x / minorStep);
+        const iMinY = Math.floor(topLeft.y / minorStep), iMaxY = Math.ceil(bottomRight.y / minorStep);
 
-        // Minor grid
-        this.ctx.lineWidth = 1 / this.scale;
-        this.ctx.strokeStyle = minorColor;
-        this.ctx.beginPath();
-        for (let x = startX; x <= endX; x += minorStep) {
-            if (Math.abs(x % majorStep) > 0.01) {
-                this.ctx.moveTo(x, topLeft.y);
-                this.ctx.lineTo(x, bottomRight.y);
-            }
+        // Minor grid (skip every line that is also a major line)
+        ctx.lineWidth = 1 / this.scale;
+        ctx.strokeStyle = minorColor;
+        ctx.beginPath();
+        for (let i = iMinX; i <= iMaxX; i++) {
+            if (i % ratio === 0) continue;
+            ctx.moveTo(i * minorStep, topLeft.y);
+            ctx.lineTo(i * minorStep, bottomRight.y);
         }
-        for (let y = startY; y <= endY; y += minorStep) {
-            if (Math.abs(y % majorStep) > 0.01) {
-                this.ctx.moveTo(topLeft.x, y);
-                this.ctx.lineTo(bottomRight.x, y);
-            }
+        for (let j = iMinY; j <= iMaxY; j++) {
+            if (j % ratio === 0) continue;
+            ctx.moveTo(topLeft.x, j * minorStep);
+            ctx.lineTo(bottomRight.x, j * minorStep);
         }
-        this.ctx.stroke();
+        ctx.stroke();
 
         // Major grid
-        this.ctx.strokeStyle = majorColor;
-        this.ctx.lineWidth = 1.2 / this.scale;
-        this.ctx.beginPath();
-        for (let x = Math.floor(topLeft.x / majorStep) * majorStep; x <= endX; x += majorStep) {
-            this.ctx.moveTo(x, topLeft.y);
-            this.ctx.lineTo(x, bottomRight.y);
+        ctx.strokeStyle = majorColor;
+        ctx.lineWidth = 1.2 / this.scale;
+        ctx.beginPath();
+        for (let i = Math.floor(topLeft.x / majorStep), end = Math.ceil(bottomRight.x / majorStep); i <= end; i++) {
+            ctx.moveTo(i * majorStep, topLeft.y);
+            ctx.lineTo(i * majorStep, bottomRight.y);
         }
-        for (let y = Math.floor(topLeft.y / majorStep) * majorStep; y <= endY; y += majorStep) {
-            this.ctx.moveTo(topLeft.x, y);
-            this.ctx.lineTo(bottomRight.x, y);
+        for (let j = Math.floor(topLeft.y / majorStep), end = Math.ceil(bottomRight.y / majorStep); j <= end; j++) {
+            ctx.moveTo(topLeft.x, j * majorStep);
+            ctx.lineTo(bottomRight.x, j * majorStep);
         }
-        this.ctx.stroke();
+        ctx.stroke();
 
         // Origin axes (0,0)
         this.ctx.strokeStyle = axisColor;
@@ -389,6 +357,27 @@ export class CanvasEngine {
                 this.ctx.closePath();
                 this.ctx.stroke();
                 this.ctx.fill();
+            } else if (this.activeSnap.type === 'intersection') {
+                // X mark
+                this.ctx.strokeStyle = '#f472b6';
+                this.ctx.beginPath();
+                this.ctx.moveTo(screen.x - 6, screen.y - 6); this.ctx.lineTo(screen.x + 6, screen.y + 6);
+                this.ctx.moveTo(screen.x + 6, screen.y - 6); this.ctx.lineTo(screen.x - 6, screen.y + 6);
+                this.ctx.stroke();
+            } else if (this.activeSnap.type === 'perpendicular') {
+                // right-angle mark
+                this.ctx.strokeStyle = '#fb923c';
+                this.ctx.beginPath();
+                this.ctx.moveTo(screen.x - 6, screen.y + 6); this.ctx.lineTo(screen.x - 6, screen.y - 6); this.ctx.lineTo(screen.x + 6, screen.y - 6);
+                this.ctx.moveTo(screen.x - 6, screen.y); this.ctx.lineTo(screen.x, screen.y); this.ctx.lineTo(screen.x, screen.y - 6);
+                this.ctx.stroke();
+            } else if (this.activeSnap.type === 'nearest') {
+                // hourglass
+                this.ctx.strokeStyle = '#a78bfa';
+                this.ctx.beginPath();
+                this.ctx.moveTo(screen.x - 6, screen.y - 6); this.ctx.lineTo(screen.x + 6, screen.y - 6);
+                this.ctx.lineTo(screen.x - 6, screen.y + 6); this.ctx.lineTo(screen.x + 6, screen.y + 6); this.ctx.closePath();
+                this.ctx.stroke();
             } else {
                 // Grid / other: small cross
                 this.ctx.strokeStyle = '#eab308';

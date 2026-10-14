@@ -76,6 +76,53 @@ export class PlotManager {
     }
 
     /**
+     * Which physical edge of the plot faces the road: 'front' (bottom), 'rear' (top), 'left' or 'right'.
+     * The main road is the widest road placed on one of those four sides; with no road it is the bottom.
+     * (`roadSidesProvider` is wired up by the app and returns the road list.)
+     */
+    getFrontEdge() {
+        const roads = (this.roadSidesProvider ? this.roadSidesProvider() : null) || [];
+        let best = null;
+        for (const r of roads) {
+            if (!['front', 'rear', 'left', 'right'].includes(r.side)) continue;
+            if (!best || (r.width || 0) > (best.width || 0)) best = r;
+        }
+        return best ? best.side : 'front';
+    }
+
+    /**
+     * Setbacks as entered (front = the road side; left/right as seen standing on the road facing
+     * the plot) mapped to the plot's physical edges: { top, bottom, left, right } in inches.
+     */
+    getPhysicalSetbacks() {
+        const sb = (this.plot && this.plot.setbacks) || {};
+        const edge = this.getFrontEdge();
+        const MAP = {
+            front: { front: 'bottom', rear: 'top',    left: 'left',   right: 'right'  },
+            rear:  { front: 'top',    rear: 'bottom', left: 'right',  right: 'left'   },
+            left:  { front: 'left',   rear: 'right',  left: 'top',    right: 'bottom' },
+            right: { front: 'right',  rear: 'left',   left: 'bottom', right: 'top'    }
+        }[edge];
+        const out = { top: 0, bottom: 0, left: 0, right: 0 };
+        for (const k of ['front', 'rear', 'left', 'right']) out[MAP[k]] = Math.max(0, sb[k] || 0);
+        return out;
+    }
+
+    /** The four setbacks with their entered name and the physical edge they sit on. */
+    getSetbackEdges() {
+        const sb = (this.plot && this.plot.setbacks) || {};
+        const edge = this.getFrontEdge();
+        const MAP = {
+            front: { front: 'bottom', rear: 'top',    left: 'left',   right: 'right'  },
+            rear:  { front: 'top',    rear: 'bottom', left: 'right',  right: 'left'   },
+            left:  { front: 'left',   rear: 'right',  left: 'top',    right: 'bottom' },
+            right: { front: 'right',  rear: 'left',   left: 'bottom', right: 'top'    }
+        }[edge];
+        return [['front', 'Front'], ['rear', 'Rear'], ['left', 'L'], ['right', 'R']]
+            .map(([key, label]) => ({ key, label, edge: MAP[key], value: sb[key] || 0 }));
+    }
+
+    /**
      * Get buildable bounds rectangle inside setbacks
      */
     getBuildableBounds() {
@@ -83,11 +130,11 @@ export class PlotManager {
         const bounds = this.getBounds();
         if (!bounds) return null;
 
-        const sb = this.plot.setbacks;
-        const innerX = bounds.x + (sb.left || 0);
-        const innerY = bounds.y + (sb.rear || 0);
-        const innerW = bounds.width - ((sb.left || 0) + (sb.right || 0));
-        const innerH = bounds.height - ((sb.rear || 0) + (sb.front || 0));
+        const ph = this.getPhysicalSetbacks();
+        const innerX = bounds.x + ph.left;
+        const innerY = bounds.y + ph.top;
+        const innerW = bounds.width - (ph.left + ph.right);
+        const innerH = bounds.height - (ph.top + ph.bottom);
 
         if (innerW <= 0 || innerH <= 0) return null;
 
@@ -426,10 +473,11 @@ export class PlotManager {
         const y3 = bounds.y + bounds.height;
 
         // Determine Building Exterior Footprint
-        let bMinX = bounds.x + (this.plot.setbacks ? (this.plot.setbacks.left || 36) : 36);
-        let bMaxX = bounds.x + bounds.width - (this.plot.setbacks ? (this.plot.setbacks.right || 36) : 36);
-        let bMinY = bounds.y + (this.plot.setbacks ? (this.plot.setbacks.rear || 36) : 36);
-        let bMaxY = bounds.y + bounds.height - (this.plot.setbacks ? (this.plot.setbacks.front || 60) : 60);
+        const ph = this.plot.setbacks ? this.getPhysicalSetbacks() : { top: 36, bottom: 60, left: 36, right: 36 };
+        let bMinX = bounds.x + ph.left;
+        let bMaxX = bounds.x + bounds.width - ph.right;
+        let bMinY = bounds.y + ph.top;
+        let bMaxY = bounds.y + bounds.height - ph.bottom;
 
         if (wallManager && wallManager.walls && wallManager.walls.length > 0) {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -709,25 +757,14 @@ export class PlotManager {
                 ctx.fillText(text, x, y);
             };
 
-            if (sb.front && sb.front > 0) {
-                const fy = bounds.y + bounds.height - sb.front / 2;
-                const fx = bounds.x + bounds.width / 2;
-                drawMarginBadge(`Front: ${units.formatLength(sb.front)}`, fx, fy);
-            }
-            if (sb.rear && sb.rear > 0) {
-                const ry = bounds.y + sb.rear / 2;
-                const rx = bounds.x + bounds.width / 2;
-                drawMarginBadge(`Rear: ${units.formatLength(sb.rear)}`, rx, ry);
-            }
-            if (sb.left && sb.left > 0) {
-                const lx = bounds.x + sb.left / 2;
-                const ly = bounds.y + bounds.height / 2;
-                drawMarginBadge(`L: ${units.formatLength(sb.left)}`, lx, ly);
-            }
-            if (sb.right && sb.right > 0) {
-                const rx = bounds.x + bounds.width - sb.right / 2;
-                const ry = bounds.y + bounds.height / 2;
-                drawMarginBadge(`R: ${units.formatLength(sb.right)}`, rx, ry);
+            for (const e of this.getSetbackEdges()) {
+                if (!(e.value > 0)) continue;
+                let bx, by;
+                if (e.edge === 'bottom') { bx = bounds.x + bounds.width / 2; by = bounds.y + bounds.height - e.value / 2; }
+                else if (e.edge === 'top') { bx = bounds.x + bounds.width / 2; by = bounds.y + e.value / 2; }
+                else if (e.edge === 'left') { bx = bounds.x + e.value / 2; by = bounds.y + bounds.height / 2; }
+                else { bx = bounds.x + bounds.width - e.value / 2; by = bounds.y + bounds.height / 2; }
+                drawMarginBadge(`${e.label}: ${units.formatLength(e.value)}`, bx, by);
             }
         }
 

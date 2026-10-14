@@ -3,8 +3,11 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { hatchSegments, drawHatch } from './hatch.js';
+import { nextId } from './ids.js';
 
-let roomIdCounter = 1;
+
 
 export const ROOM_PRESETS = [
     { name: 'Living Room', defaultW: 192, defaultH: 216, color: 'rgba(59, 130, 246, 0.08)' }, // 16' x 18'
@@ -26,7 +29,7 @@ export const ROOM_PRESETS = [
 
 export class Room {
     constructor(x, y, options = {}) {
-        this.id = `room_${roomIdCounter++}`;
+        this.id = nextId('room');
         this.x = x;
         this.y = y;
         this.name = options.name || 'Room';
@@ -249,7 +252,7 @@ export class RoomManager {
     }
 
     addRoom(x, y, options = {}) {
-        const room = new Room(x, y, options);
+        const room = stampLayer(this.layers, new Room(x, y, options));
         this.rooms.push(room);
         return room;
     }
@@ -279,6 +282,7 @@ export class RoomManager {
 
     render(ctx, scale, isExport = false, style = 'blueprint') {
         for (const room of this.rooms) {
+            if (!visibleIn(this.layers, room, 'room')) continue;
             const isSelected = room.id === this.selectedRoomId;
             this.renderSingleRoom(ctx, room, scale, isSelected, isExport, style);
         }
@@ -314,6 +318,19 @@ export class RoomManager {
 
         // Draw Void Cutout cross (X) or Double Height volume brackets
         const b = roomObj.getBounds();
+
+        // Floor finish pattern (tiles, wood, ...): clipped to the room, drawn under the label
+        if (roomObj.hatch && roomObj.hatch !== 'none' && !roomObj.isVoid) {
+            ctx.save();
+            if (Array.isArray(roomObj.polygon) && roomObj.polygon.length >= 3) {
+                ctx.beginPath(); ctx.moveTo(roomObj.polygon[0].x, roomObj.polygon[0].y);
+                for (let i = 1; i < roomObj.polygon.length; i++) ctx.lineTo(roomObj.polygon[i].x, roomObj.polygon[i].y);
+                ctx.closePath(); ctx.clip();
+            }
+            drawHatch(ctx, hatchSegments(roomObj.hatch, b, roomObj.hatchScale || 1),
+                isClean ? 'rgba(71, 85, 105, 0.55)' : 'rgba(148, 163, 184, 0.40)', (isExport ? 0.9 : 0.7) / scale);
+            ctx.restore();
+        }
         if (roomObj.isVoid) {
             ctx.save();
             ctx.beginPath();
@@ -588,7 +605,7 @@ export class RoomManager {
     getRoomAt(x, y, scale = 1) {
         // Check badge pill for selection and dragging
         for (let i = this.rooms.length - 1; i >= 0; i--) {
-            if (this.rooms[i].hitBadge(x, y, scale)) {
+            if (selectableIn(this.layers, this.rooms[i], 'room') && this.rooms[i].hitBadge(x, y, scale)) {
                 return this.rooms[i];
             }
         }

@@ -3,12 +3,92 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { nextId } from './ids.js';
 
-let wallIdCounter = 1;
+
+
+/**
+ * Work out clean corner joints for a set of walls.
+ *
+ * Returns Map(wall.id -> { pts, startJoined, endJoined }) where `pts` is the wall's 4-point outline in the
+ * same order as Wall.getPolygon() ([start+n, end+n, end-n, start-n]) but with MITRED ends wherever exactly
+ * one other wall meets that end at an angle, and flat (square) ends everywhere else.
+ * `startJoined` / `endJoined` say whether another wall meets that end (so the renderer should not draw an
+ * end-cap line there). Compound (boundary) walls are left alone - they use masonry piers instead.
+ */
+export function joinWalls(walls, tol = 1.5, maxMitre = 3) {
+    const result = new Map();
+    const list = walls.filter(w => w.type !== 'compound' && w.getLength() > 0.001);
+    const unit = (w) => { const L = w.getLength(); return { x: (w.end.x - w.start.x) / L, y: (w.end.y - w.start.y) / L }; };
+    const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) <= tol;
+
+    // line-line intersection (p + t*d), null when parallel
+    const intersect = (p1, d1, p2, d2) => {
+        const det = d1.x * d2.y - d1.y * d2.x;
+        if (Math.abs(det) < 1e-6) return null;
+        const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / det;
+        return { x: p1.x + d1.x * t, y: p1.y + d1.y * t };
+    };
+
+    for (const w of list) {
+        const u = unit(w);
+        const n = { x: -u.y, y: u.x };
+        const half = w.thickness / 2;
+        // pts[0]=start+n  pts[1]=end+n  pts[2]=end-n  pts[3]=start-n
+        const pts = [
+            { x: w.start.x + n.x * half, y: w.start.y + n.y * half },
+            { x: w.end.x + n.x * half, y: w.end.y + n.y * half },
+            { x: w.end.x - n.x * half, y: w.end.y - n.y * half },
+            { x: w.start.x - n.x * half, y: w.start.y - n.y * half }
+        ];
+        const info = { pts, startJoined: false, endJoined: false };
+
+        for (const endKey of ['start', 'end']) {
+            const P = w[endKey];
+            const meets = [];
+            for (const o of list) {
+                if (o === w) continue;
+                if (near(o.start, P)) meets.push({ o, key: 'start' });
+                else if (near(o.end, P)) meets.push({ o, key: 'end' });
+            }
+            if (meets.length === 0) continue;
+            if (endKey === 'start') info.startJoined = true; else info.endJoined = true;
+            if (meets.length !== 1) continue;                      // T / cross junction: keep the flat end
+
+            // directions pointing AWAY from the joint, for this wall (A) and the other wall (B)
+            const { o: B, key: bKey } = meets[0];
+            const uB = unit(B);
+            const dA = endKey === 'start' ? u : { x: -u.x, y: -u.y };
+            const dB = bKey === 'start' ? uB : { x: -uB.x, y: -uB.y };
+            if (Math.abs(dA.x * dB.y - dA.y * dB.x) < 0.05) continue;   // (almost) straight on, or folded back: flat end
+            const nB = { x: -uB.y, y: uB.x };
+            const halfB = B.thickness / 2;
+
+            // A's edge that faces B (the "inner" edge of the corner) is the one whose offset points towards dB
+            const sInA = (n.x * dB.x + n.y * dB.y) >= 0 ? 1 : -1;      // sign of n on A's inner edge
+            const sInB = (nB.x * dA.x + nB.y * dA.y) >= 0 ? 1 : -1;
+            const edgeA = (sg) => ({ x: w.start.x + n.x * half * sg, y: w.start.y + n.y * half * sg });
+            const edgeB = (sg) => ({ x: B.start.x + nB.x * halfB * sg, y: B.start.y + nB.y * halfB * sg });
+            const inner = intersect(edgeA(sInA), u, edgeB(sInB), uB);
+            const outer = intersect(edgeA(-sInA), u, edgeB(-sInB), uB);
+            if (!inner || !outer) continue;
+            // very sharp angles give long spikes: fall back to a flat end
+            if (Math.hypot(outer.x - P.x, outer.y - P.y) > maxMitre * Math.max(w.thickness, B.thickness)) continue;
+
+            // write the two corner points into this wall's outline
+            const idx = (sg) => endKey === 'start' ? (sg > 0 ? 0 : 3) : (sg > 0 ? 1 : 2);
+            pts[idx(sInA)] = inner;
+            pts[idx(-sInA)] = outer;
+        }
+        result.set(w.id, info);
+    }
+    return result;
+}
 
 export class Wall {
     constructor(start, end, thickness = 9, type = 'exterior') {
-        this.id = `wall_${wallIdCounter++}`;
+        this.id = nextId('wall');
         this.start = { x: start.x, y: start.y };
         this.end = { x: end.x, y: end.y };
         this.thickness = thickness; // 9" for exterior, 4.5" for interior
@@ -114,12 +194,19 @@ export class WallManager {
         this.defaultCompoundThickness = 6;   // 6 inches (150mm)
         this.currentThickness = 9;
         this.currentType = 'exterior';
+        // How wall ends meet: 'mitre' = sharp architectural corners, 'round' = the original rounded caps
+        this.cornerStyle = 'mitre';
+    }
+
+    /** Joint geometry for `walls` (default: all walls), or null when rounded corners are selected. */
+    getJoinedPolygons(walls = this.walls) {
+        return this.cornerStyle === 'round' ? null : joinWalls(walls);
     }
 
     addWall(start, end, thickness = this.currentThickness, type = this.currentType) {
         // Prevent zero-length walls
         if (Math.hypot(end.x - start.x, end.y - start.y) < 1.0) return null;
-        const wall = new Wall(start, end, thickness, type);
+        const wall = stampLayer(this.layers, new Wall(start, end, thickness, type));
         this.walls.push(wall);
         return wall;
     }
@@ -178,6 +265,7 @@ export class WallManager {
     getSnapTargets() {
         const targets = [];
         for (const wall of this.walls) {
+            if (!visibleIn(this.layers, wall, 'wall')) continue;
             targets.push({ x: wall.start.x, y: wall.start.y, type: 'endpoint' });
             targets.push({ x: wall.end.x, y: wall.end.y, type: 'endpoint' });
             const mid = wall.getMidpoint();
@@ -333,14 +421,17 @@ export class WallManager {
      * Render all walls
      */
     render(ctx, scale, openingManager = null, style = 'blueprint') {
-        for (const wall of this.walls) {
+        const shown = this.walls.filter(w => visibleIn(this.layers, w, 'wall'));
+        const joins = this.getJoinedPolygons(shown);
+        for (const wall of shown) {
             const isSelected = wall.id === this.selectedWallId;
-            this.renderSingleWall(ctx, wall, scale, isSelected, openingManager, style);
+            this.renderSingleWall(ctx, wall, scale, isSelected, openingManager, style, joins);
         }
     }
 
-    renderSingleWall(ctx, wall, scale, isSelected, openingManager, style = 'blueprint') {
-        const poly = wall.getPolygon();
+    renderSingleWall(ctx, wall, scale, isSelected, openingManager, style = 'blueprint', joins = null) {
+        const join = joins ? joins.get(wall.id) : null;
+        const poly = join ? join.pts : wall.getPolygon();
         if (poly.length < 4) return;
 
         ctx.save();
@@ -372,7 +463,26 @@ export class WallManager {
 
         ctx.fill();
         ctx.lineWidth = (wall.type === 'compound' ? 2.0 : 1.5) / scale;
-        ctx.stroke();
+        if (join) {
+            // Neighbouring walls share the mitre edge; anti-aliasing would leave a faint hairline there.
+            // Stroking the fill in its own colour closes that seam before the outline is drawn.
+            const outlineColor = ctx.strokeStyle;
+            ctx.strokeStyle = ctx.fillStyle;
+            ctx.lineWidth = 1.2 / scale;
+            ctx.stroke();
+            ctx.strokeStyle = outlineColor;
+            ctx.lineWidth = (wall.type === 'compound' ? 2.0 : 1.5) / scale;
+
+            // Outline only the two long faces and any FREE end, so no seam line is drawn across a joint
+            ctx.beginPath();
+            ctx.moveTo(poly[0].x, poly[0].y); ctx.lineTo(poly[1].x, poly[1].y);
+            ctx.moveTo(poly[3].x, poly[3].y); ctx.lineTo(poly[2].x, poly[2].y);
+            if (!join.startJoined) { ctx.moveTo(poly[0].x, poly[0].y); ctx.lineTo(poly[3].x, poly[3].y); }
+            if (!join.endJoined) { ctx.moveTo(poly[1].x, poly[1].y); ctx.lineTo(poly[2].x, poly[2].y); }
+            ctx.stroke();
+        } else {
+            ctx.stroke();
+        }
 
         // Compound wall endpoint masonry pier posts
         if (wall.type === 'compound') {
@@ -384,8 +494,8 @@ export class WallManager {
             ctx.strokeRect(wall.start.x - pierHalf, wall.start.y - pierHalf, pierHalf * 2, pierHalf * 2);
             ctx.fillRect(wall.end.x - pierHalf, wall.end.y - pierHalf, pierHalf * 2, pierHalf * 2);
             ctx.strokeRect(wall.end.x - pierHalf, wall.end.y - pierHalf, pierHalf * 2, pierHalf * 2);
-        } else {
-            // Corner joint caps (smooth joins at endpoints)
+        } else if (!join) {
+            // Rounded corner joint caps (cornerStyle 'round')
             ctx.beginPath();
             ctx.arc(wall.start.x, wall.start.y, wall.thickness / 2, 0, Math.PI * 2);
             ctx.arc(wall.end.x, wall.end.y, wall.thickness / 2, 0, Math.PI * 2);
@@ -475,6 +585,7 @@ export class WallManager {
      */
     getWallAt(x, y, scale, toleranceExtra = 0) {
         for (let i = this.walls.length - 1; i >= 0; i--) {
+            if (!selectableIn(this.layers, this.walls[i], 'wall')) continue;
             const proj = this.walls[i].projectPoint({ x, y });
             const tolerance = Math.max(this.walls[i].thickness / 2, 8 / scale) + toleranceExtra;
             if (proj.dist <= tolerance) {

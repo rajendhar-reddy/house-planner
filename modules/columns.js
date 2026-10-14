@@ -3,8 +3,10 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { nextId } from './ids.js';
 
-let columnIdCounter = 1;
+
 
 export const COLUMN_PRESETS = [
     { name: '9" × 9" (Square Pier)', width: 9, depth: 9, label: 'C-9x9' },
@@ -17,14 +19,14 @@ export const COLUMN_PRESETS = [
 
 export class Column {
     constructor(x, y, options = {}) {
-        this.id = `col_${columnIdCounter++}`;
+        this.id = nextId('col');
         this.x = x;
         this.y = y;
         this.width = options.width || 9;     // 9 inches default
         this.depth = options.depth || 12;    // 12 inches default
         this.rotation = options.rotation !== undefined ? options.rotation : 0; // 0 or 90
-        this.type = options.type || 'standard_rcc'; // 'standard_rcc' | 'circular'
-        this.name = options.name || `C${columnIdCounter - 1}`;
+        this.type = options.type || 'standard_rcc'; // only 'standard_rcc' is implemented (circular columns are not drawn)
+        this.name = options.name || `C${this.id.split('_')[1]}`;
         this.showLabel = options.showLabel || false;
     }
 
@@ -103,6 +105,7 @@ export class ColumnManager {
             name: options.name || `C${this.columns.length + 1}`,
             showLabel: options.showLabel || false
         });
+        stampLayer(this.layers, col);
         this.columns.push(col);
         return col;
     }
@@ -163,7 +166,7 @@ export class ColumnManager {
 
     getColumnAt(x, y, scale = 1) {
         for (let i = this.columns.length - 1; i >= 0; i--) {
-            if (this.columns[i].hitTest(x, y, scale)) {
+            if (selectableIn(this.layers, this.columns[i], 'column') && this.columns[i].hitTest(x, y, scale)) {
                 return this.columns[i];
             }
         }
@@ -173,6 +176,7 @@ export class ColumnManager {
     render(ctx, scale, isExport = false, style = 'blueprint') {
         const isClean = style === 'clean';
         for (const col of this.columns) {
+            if (!visibleIn(this.layers, col, 'column')) continue;
             const isSelected = col.id === this.selectedColumnId;
             this.renderSingleColumn(ctx, col, scale, isSelected, isExport, isClean);
         }

@@ -3,12 +3,15 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { dimStyleOf, drawDimEnd } from './dimstyles.js';
+import { nextId } from './ids.js';
 
-let dimIdCounter = 1;
+
 
 export class DimensionLine {
     constructor(start, end, offset = 24, customText = null) {
-        this.id = `dim_${dimIdCounter++}`;
+        this.id = nextId('dim');
         this.start = { x: start.x, y: start.y };
         this.end = { x: end.x, y: end.y };
         this.offset = offset; // perpendicular offset in inches
@@ -82,7 +85,9 @@ export class DimensionManager {
 
     addDimension(start, end, offset = 24, customText = null) {
         if (Math.hypot(end.x - start.x, end.y - start.y) < 1.0) return null;
-        const dim = new DimensionLine(start, end, offset, customText);
+        const dim = stampLayer(this.layers, new DimensionLine(start, end, offset, customText));
+        const sid = this.styleSource ? this.styleSource() : null;
+        if (sid && sid !== 'standard') dim.dimStyle = sid;
         this.dimensions.push(dim);
         return dim;
     }
@@ -103,6 +108,7 @@ export class DimensionManager {
 
     render(ctx, scale, isExport = false, style = 'blueprint') {
         for (const dim of this.dimensions) {
+            if (!visibleIn(this.layers, dim, 'dimension')) continue;
             const isSelected = dim.id === this.selectedDimId;
             this.renderSingleDimension(ctx, dim, scale, isSelected, isExport, style);
         }
@@ -116,6 +122,7 @@ export class DimensionManager {
         if (!geom) return;
 
         const isClean = style === 'clean';
+        const dstyle = dimStyleOf(dimObj);
         const label = dimObj.customText || units.formatLength(geom.len);
         const lineColor = (isSelected && !isExport)
             ? '#38bdf8'
@@ -155,9 +162,10 @@ export class DimensionManager {
         ctx.stroke();
 
         // 3. Architectural 45-degree tick marks
-        const tickSize = (isExport ? 9 : 6) / scale;
-        this.drawArchitecturalTick(ctx, geom.p1.x, geom.p1.y, geom.angle, tickSize, tickColor, scale, isExport);
-        this.drawArchitecturalTick(ctx, geom.p2.x, geom.p2.y, geom.angle, tickSize, tickColor, scale, isExport);
+        const tickSize = ((isExport ? 9 : 6) / scale) * Math.sqrt(dstyle.textScale);
+        const arch = (c, x, y, a, sz, col, sc, ex) => this.drawArchitecturalTick(c, x, y, a, sz, col, sc, ex);
+        drawDimEnd(ctx, dstyle.tick, geom.p1.x, geom.p1.y, geom.angle, tickSize, tickColor, scale, isExport, arch, -1);
+        drawDimEnd(ctx, dstyle.tick, geom.p2.x, geom.p2.y, geom.angle, tickSize, tickColor, scale, isExport, arch, 1);
 
         // 4. Dimension text label
         const midX = (geom.p1.x + geom.p2.x) / 2;
@@ -171,7 +179,7 @@ export class DimensionManager {
         if (textAngle < -Math.PI / 2) textAngle += Math.PI;
         ctx.rotate(textAngle);
 
-        const targetFontPx = isExport ? 22 : 11;
+        const targetFontPx = (isExport ? 22 : 11) * dstyle.textScale;
         const fontSize = Math.max(targetFontPx / scale, 3);
         ctx.font = `600 ${fontSize}px sans-serif`;
         const textW = ctx.measureText(label).width;
@@ -208,7 +216,7 @@ export class DimensionManager {
 
     getDimAt(x, y, scale) {
         for (let i = this.dimensions.length - 1; i >= 0; i--) {
-            if (this.dimensions[i].hitTest(x, y, scale)) {
+            if (selectableIn(this.layers, this.dimensions[i], 'dimension') && this.dimensions[i].hitTest(x, y, scale)) {
                 return this.dimensions[i];
             }
         }

@@ -4,6 +4,15 @@
 
 import { units } from './units.js';
 import { PDFWriter } from './pdf.js';
+import { escapeHtml } from './util.js';
+import { buildDXF } from './dxf.js';
+import { hatchSegments } from './hatch.js';
+import { arcPoints } from './annotations.js';
+
+/** Entities of a category that are on visible layers (all of them when the project has no layer manager). */
+function shownIn(ps, list, category) {
+    return ps.layerManager ? list.filter(e => ps.layerManager.isVisible(e, category)) : list;
+}
 
 export class Exporter {
     /**
@@ -90,19 +99,22 @@ export class Exporter {
                 projectState.stairManager.render(ctx, exportScale);
             }
             if (projectState.wallManager) {
-                projectState.wallManager.render(ctx, exportScale, projectState.openingManager);
+                projectState.wallManager.render(ctx, exportScale, projectState.openingManager, style);
             }
             if (projectState.columnManager) {
                 projectState.columnManager.render(ctx, exportScale, true, style);
             }
             if (projectState.openingManager) {
-                projectState.openingManager.render(ctx, exportScale, projectState.wallManager);
+                projectState.openingManager.render(ctx, exportScale, projectState.wallManager, style);
             }
             if (projectState.furnitureManager) {
                 projectState.furnitureManager.render(ctx, exportScale);
             }
             if (projectState.dimensionManager) {
                 projectState.dimensionManager.render(ctx, exportScale, true, style);
+            }
+            if (projectState.annotationManager) {
+                projectState.annotationManager.render(ctx, exportScale, true, style);
             }
             if (projectState.floorManager) {
                 const active = projectState.floorManager.getActiveFloor();
@@ -173,6 +185,61 @@ export class Exporter {
     /**
      * Render full architectural drawing sheet onto a specified canvas
      */
+    /**
+     * Draw every layer of the plan onto `ctx` in world units. The caller sets the transform (scale/translate);
+     * `exportScale` is how many canvas pixels one world inch covers (managers use it to size lines and text).
+     * Shared by the PNG/PDF export and the print-to-scale sheet.
+     */
+    static drawPlan(ctx, projectState, exportScale, style) {
+
+        if (projectState.floorManager && projectState.floorManager.viewMode === 'side_by_side') {
+            if (projectState.roadManager && projectState.plotManager) {
+                projectState.roadManager.render(ctx, exportScale, projectState.plotManager.getBounds(), true, style);
+            }
+            if (projectState.plotManager) {
+                projectState.plotManager.render(ctx, exportScale, false, projectState.wallManager, style, true);
+            }
+            projectState.floorManager.render(ctx, exportScale, true, style);
+        } else {
+            if (projectState.roadManager && projectState.plotManager) {
+                projectState.roadManager.render(ctx, exportScale, projectState.plotManager.getBounds(), true, style);
+            }
+            if (projectState.plotManager) {
+                projectState.plotManager.render(ctx, exportScale, false, projectState.wallManager, style, true);
+            }
+            if (projectState.roomManager) {
+                projectState.roomManager.render(ctx, exportScale, true, style);
+            }
+            if (projectState.stairManager) {
+                projectState.stairManager.render(ctx, exportScale);
+            }
+            if (projectState.wallManager) {
+                projectState.wallManager.render(ctx, exportScale, projectState.openingManager, style);
+            }
+            if (projectState.columnManager) {
+                projectState.columnManager.render(ctx, exportScale, true, style);
+            }
+            if (projectState.openingManager) {
+                projectState.openingManager.render(ctx, exportScale, projectState.wallManager, style);
+            }
+            if (projectState.furnitureManager) {
+                projectState.furnitureManager.render(ctx, exportScale);
+            }
+            if (projectState.dimensionManager) {
+                projectState.dimensionManager.render(ctx, exportScale, true, style);
+            }
+            if (projectState.annotationManager) {
+                projectState.annotationManager.render(ctx, exportScale, true, style);
+            }
+            if (projectState.floorManager) {
+                const active = projectState.floorManager.getActiveFloor();
+                if (active) {
+                    projectState.floorManager.renderFloorTitleBanner(ctx, active, { x: 0, y: 0 }, exportScale, style === 'clean');
+                }
+            }
+        }
+    }
+
     static renderToCanvas(targetCanvas, projectState, options = {}) {
         const style = options.style || 'clean';
         const title = options.title || 'RESIDENTIAL HOUSE PLAN';
@@ -211,51 +278,7 @@ export class Exporter {
         ctx.save();
         ctx.scale(exportScale, exportScale);
         ctx.translate(-bounds.x + pad, -bounds.y + pad);
-
-        if (projectState.floorManager && projectState.floorManager.viewMode === 'side_by_side') {
-            if (projectState.roadManager && projectState.plotManager) {
-                projectState.roadManager.render(ctx, exportScale, projectState.plotManager.getBounds(), true, style);
-            }
-            if (projectState.plotManager) {
-                projectState.plotManager.render(ctx, exportScale, false, projectState.wallManager, style, true);
-            }
-            projectState.floorManager.render(ctx, exportScale, true, style);
-        } else {
-            if (projectState.roadManager && projectState.plotManager) {
-                projectState.roadManager.render(ctx, exportScale, projectState.plotManager.getBounds(), true, style);
-            }
-            if (projectState.plotManager) {
-                projectState.plotManager.render(ctx, exportScale, false, projectState.wallManager, style, true);
-            }
-            if (projectState.roomManager) {
-                projectState.roomManager.render(ctx, exportScale, true, style);
-            }
-            if (projectState.stairManager) {
-                projectState.stairManager.render(ctx, exportScale);
-            }
-            if (projectState.wallManager) {
-                projectState.wallManager.render(ctx, exportScale, projectState.openingManager, style);
-            }
-            if (projectState.columnManager) {
-                projectState.columnManager.render(ctx, exportScale, true, style);
-            }
-            if (projectState.openingManager) {
-                projectState.openingManager.render(ctx, exportScale, projectState.wallManager);
-            }
-            if (projectState.furnitureManager) {
-                projectState.furnitureManager.render(ctx, exportScale);
-            }
-            if (projectState.dimensionManager) {
-                projectState.dimensionManager.render(ctx, exportScale, true, style);
-            }
-            if (projectState.floorManager) {
-                const active = projectState.floorManager.getActiveFloor();
-                if (active) {
-                    projectState.floorManager.renderFloorTitleBanner(ctx, active, { x: 0, y: 0 }, exportScale, style === 'clean');
-                }
-            }
-        }
-
+        this.drawPlan(ctx, projectState, exportScale, style);
         ctx.restore();
 
         this.renderTitleBlock(ctx, targetW, targetH, style, title, client, projectState);
@@ -376,8 +399,10 @@ export class Exporter {
         // 2. Walls Layer
         if (projectState.wallManager) {
             svg += `<g id="walls">\n`;
-            for (const wall of projectState.wallManager.walls) {
-                const p = wall.getPolygon();
+            const wallJoins = projectState.wallManager.getJoinedPolygons ? projectState.wallManager.getJoinedPolygons(shownIn(projectState, projectState.wallManager.walls, 'wall')) : null;
+            for (const wall of shownIn(projectState, projectState.wallManager.walls, 'wall')) {
+                const joined = wallJoins ? wallJoins.get(wall.id) : null;
+                const p = joined ? joined.pts : wall.getPolygon();
                 if (p.length === 4) {
                     const cls = wall.type === 'exterior' ? 'wall-ext' : 'wall-int';
                     svg += `<polygon points="${p[0].x},${p[0].y} ${p[1].x},${p[1].y} ${p[2].x},${p[2].y} ${p[3].x},${p[3].y}" class="${cls}" />\n`;
@@ -389,14 +414,14 @@ export class Exporter {
         // 2b. Columns Layer
         if (projectState.columnManager && projectState.columnManager.columns.length > 0) {
             svg += `<g id="columns">\n`;
-            for (const col of projectState.columnManager.columns) {
+            for (const col of shownIn(projectState, projectState.columnManager.columns, 'column')) {
                 const pts = col.getPolygon();
                 const polyStr = pts.map(p => `${p.x},${p.y}`).join(' ');
                 svg += `  <polygon points="${polyStr}" fill="#0f172a" stroke="#000000" stroke-width="1.5" />\n`;
                 svg += `  <line x1="${pts[0].x}" y1="${pts[0].y}" x2="${pts[2].x}" y2="${pts[2].y}" stroke="#ffffff" stroke-width="0.8" opacity="0.6" />\n`;
                 svg += `  <line x1="${pts[1].x}" y1="${pts[1].y}" x2="${pts[3].x}" y2="${pts[3].y}" stroke="#ffffff" stroke-width="0.8" opacity="0.6" />\n`;
                 if (col.showLabel) {
-                    svg += `  <text x="${col.x}" y="${col.y + col.depth / 2 + 10}" font-family="sans-serif" font-size="9" font-weight="bold" fill="#0f172a" text-anchor="middle">${col.name}</text>\n`;
+                    svg += `  <text x="${col.x}" y="${col.y + col.depth / 2 + 10}" font-family="sans-serif" font-size="9" font-weight="bold" fill="#0f172a" text-anchor="middle">${escapeHtml(col.name)}</text>\n`;
                 }
             }
             svg += `</g>\n`;
@@ -404,8 +429,14 @@ export class Exporter {
 
         // 3. Rooms Layer
         if (projectState.roomManager) {
+            // floor finish patterns (under the room labels)
+            for (const hr of shownIn(projectState, projectState.roomManager.rooms, 'room')) {
+                if (!hr.hatch || hr.hatch === 'none' || hr.isVoid || (hr.polygon && hr.polygon.length >= 3)) continue;
+                const d = hatchSegments(hr.hatch, hr.getBounds(), hr.hatchScale || 1).map(g => `M${g.x1.toFixed(2)} ${g.y1.toFixed(2)}L${g.x2.toFixed(2)} ${g.y2.toFixed(2)}`).join('');
+                if (d) svg += `<path d="${d}" fill="none" stroke="#94a3b8" stroke-width="0.6" />\n`;
+            }
             svg += `<g id="rooms">\n`;
-            for (const r of projectState.roomManager.rooms) {
+            for (const r of shownIn(projectState, projectState.roomManager.rooms, 'room')) {
                 const metrics = r.getBadgeMetrics(1.0, false);
                 const areaSqInches = r.getArea();
                 const areaFormatted = units.formatArea(areaSqInches);
@@ -419,16 +450,16 @@ export class Exporter {
                 svg += `    <rect x="${r.x - hw}" y="${r.y - hh}" width="${metrics.badgeW}" height="${metrics.badgeH}" rx="4" fill="rgba(15, 23, 42, 0.92)" stroke="#38bdf8" stroke-width="1" />\n`;
 
                 if (metrics.linesCount === 3) {
-                    svg += `    <text x="${r.x}" y="${r.y - metrics.lineSpacing * 1.05}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${(r.name || 'Room').toUpperCase()}</text>\n`;
+                    svg += `    <text x="${r.x}" y="${r.y - metrics.lineSpacing * 1.05}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${escapeHtml((r.name || 'Room').toUpperCase())}</text>\n`;
                     svg += `    <text x="${r.x}" y="${r.y}" font-family="sans-serif" font-size="${Math.round(metrics.subSize)}" font-weight="600" fill="#f1f5f9" text-anchor="middle" dominant-baseline="central">${dimFormatted}</text>\n`;
                     svg += `    <text x="${r.x}" y="${r.y + metrics.lineSpacing * 1.05}" font-family="sans-serif" font-size="${Math.round(metrics.subSize)}" font-weight="600" fill="#38bdf8" text-anchor="middle" dominant-baseline="central">${areaFormatted.primary}</text>\n`;
                 } else if (metrics.linesCount === 2) {
                     const secondText = metrics.showDim ? dimFormatted : areaFormatted.primary;
                     const secondColor = metrics.showDim ? '#f1f5f9' : '#38bdf8';
-                    svg += `    <text x="${r.x}" y="${r.y - metrics.lineSpacing * 0.55}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${(r.name || 'Room').toUpperCase()}</text>\n`;
+                    svg += `    <text x="${r.x}" y="${r.y - metrics.lineSpacing * 0.55}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${escapeHtml((r.name || 'Room').toUpperCase())}</text>\n`;
                     svg += `    <text x="${r.x}" y="${r.y + metrics.lineSpacing * 0.55}" font-family="sans-serif" font-size="${Math.round(metrics.subSize)}" font-weight="600" fill="${secondColor}" text-anchor="middle" dominant-baseline="central">${secondText}</text>\n`;
                 } else {
-                    svg += `    <text x="${r.x}" y="${r.y}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${(r.name || 'Room').toUpperCase()}</text>\n`;
+                    svg += `    <text x="${r.x}" y="${r.y}" font-family="sans-serif" font-size="${Math.round(metrics.titleSize)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${escapeHtml((r.name || 'Room').toUpperCase())}</text>\n`;
                 }
                 svg += `  </g>\n`;
             }
@@ -438,11 +469,11 @@ export class Exporter {
         // 4. Stairs Layer
         if (projectState.stairManager) {
             svg += `<g id="stairs">\n`;
-            for (const s of projectState.stairManager.stairs) {
+            for (const s of shownIn(projectState, projectState.stairManager.stairs, 'stair')) {
                 const dim = s.getLocalDimensions();
                 svg += `  <g transform="translate(${s.x}, ${s.y}) rotate(${s.rotation})">\n`;
                 svg += `    <rect x="${-dim.width / 2}" y="${-dim.height / 2}" width="${dim.width}" height="${dim.height}" fill="#334155" fill-opacity="0.4" stroke="#94a3b8" stroke-width="2" />\n`;
-                svg += `    <text x="0" y="0" font-family="sans-serif" font-size="10" font-weight="bold" fill="#38bdf8" text-anchor="middle">STAIRS (${s.treads} STEPS)</text>\n`;
+                svg += `    <text x="0" y="0" font-family="sans-serif" font-size="10" font-weight="bold" fill="#38bdf8" text-anchor="middle">STAIRS (${s.getCountLabel()})</text>\n`;
                 svg += `  </g>\n`;
             }
             svg += `</g>\n`;
@@ -463,13 +494,37 @@ export class Exporter {
                     const bounds = slabMgr.getPolygonBounds(poly);
                     if (bounds) {
                         const lbl = slabMgr.labelText || 'ROOF SLAB PROJECTION';
-                        svg += `  <text x="${bounds.x + bounds.width / 2}" y="${bounds.y + bounds.height + 12}" font-family="sans-serif" font-size="9" font-weight="bold" fill="${strokeCol}" text-anchor="middle">${lbl}</text>\n`;
+                        svg += `  <text x="${bounds.x + bounds.width / 2}" y="${bounds.y + bounds.height + 12}" font-family="sans-serif" font-size="9" font-weight="bold" fill="${strokeCol}" text-anchor="middle">${escapeHtml(lbl)}</text>\n`;
                     }
                 }
                 svg += `</g>\n`;
             }
         }
 
+        // Annotation: text notes, leaders, angular dimensions
+        if (projectState.annotationManager) {
+            const am = projectState.annotationManager;
+            const esc = escapeHtml;
+            svg += `<g id="annotation" font-family="sans-serif" fill="#0f172a">\n`;
+            for (const t of shownIn(projectState, am.texts, 'text')) {
+                String(t.text).split('\n').forEach((ln, i) => {
+                    svg += `  <text x="${t.x}" y="${t.y}" font-size="${t.height}" text-anchor="${t.align === 'center' ? 'middle' : 'start'}" transform="rotate(${t.rotation || 0} ${t.x} ${t.y}) translate(0 ${i * t.height * 1.2})">${esc(ln)}</text>\n`;
+                });
+            }
+            for (const l of shownIn(projectState, am.leaders, 'leader')) {
+                const o = l.textOrigin(), last = l.points[l.points.length - 1];
+                svg += `  <polyline points="${l.points.map(p => `${p.x},${p.y}`).join(' ')} ${last.x + l.side() * o.landing},${last.y}" fill="none" stroke="#334155" stroke-width="1" />\n`;
+                String(l.text).split('\n').forEach((ln, i) => { svg += `  <text x="${o.x}" y="${o.y + i * l.height * 1.2}" font-size="${l.height}">${esc(ln)}</text>\n`; });
+            }
+            for (const d of shownIn(projectState, am.angdims, 'angdim')) {
+                const pts = arcPoints(d);
+                if (!pts.length) continue;
+                svg += `  <polyline points="${pts.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#334155" stroke-width="1" />\n`;
+                const m = pts[Math.floor(pts.length / 2)];
+                svg += `  <text x="${m.x}" y="${m.y}" font-size="9" text-anchor="middle">${esc(d.label())}</text>\n`;
+            }
+            svg += `</g>\n`;
+        }
         svg += `</svg>`;
 
         const blob = new Blob([svg], { type: 'image/svg+xml' });
@@ -480,158 +535,7 @@ export class Exporter {
      * Export AutoCAD DXF Format (ASCII DXF R12 standard)
      */
     static exportDXF(projectState, filename = 'house_plan.dxf') {
-        let dxf = '';
-        // Header
-        dxf += '0\nSECTION\n2\nHEADER\n';
-        dxf += '9\n$ACADVER\n1\nAC1009\n'; // AutoCAD R12
-        dxf += '0\nENDSEC\n';
-
-        // Tables: Layers
-        dxf += '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n9\n';
-        const layers = ['ROADS', 'PLOT', 'SLAB_PROJECTION', 'COLUMNS', 'STAIRS', 'WALLS_EXTERIOR', 'WALLS_INTERIOR', 'WALLS_COMPOUND', 'DOORS', 'WINDOWS', 'GATES', 'LANDSCAPE', 'FURNITURE', 'DIMENSIONS'];
-        for (const lyr of layers) {
-            dxf += '0\nLAYER\n2\n' + lyr + '\n70\n0\n62\n7\n6\nCONTINUOUS\n';
-        }
-        dxf += '0\nENDTAB\n0\nENDSEC\n';
-
-        // Entities section
-        dxf += '0\nSECTION\n2\nENTITIES\n';
-
-        // Roads
-        if (projectState.roadManager && projectState.plotManager && projectState.plotManager.plot) {
-            const pb = projectState.plotManager.getBounds();
-            if (pb) {
-                for (const r of projectState.roadManager.roads) {
-                    const g = r.getGeometry(pb);
-                    if (g && g.bounds) {
-                        const b = g.bounds;
-                        const pts = [
-                            { x: b.x, y: b.y },
-                            { x: b.x + b.width, y: b.y },
-                            { x: b.x + b.width, y: b.y + b.height },
-                            { x: b.x, y: b.y + b.height }
-                        ];
-                        for (let i = 0; i < 4; i++) {
-                            const p1 = pts[i];
-                            const p2 = pts[(i + 1) % 4];
-                            dxf += `0\nLINE\n8\nROADS\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Columns
-        if (projectState.columnManager && projectState.columnManager.columns.length > 0) {
-            for (const col of projectState.columnManager.columns) {
-                const pts = col.getPolygon();
-                for (let i = 0; i < pts.length; i++) {
-                    const p1 = pts[i];
-                    const p2 = pts[(i + 1) % pts.length];
-                    dxf += `0\nLINE\n8\nCOLUMNS\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-                }
-                // Structural cross lines
-                dxf += `0\nLINE\n8\nCOLUMNS\n10\n${pts[0].x}\n20\n${-pts[0].y}\n30\n0.0\n11\n${pts[2].x}\n21\n${-pts[2].y}\n31\n0.0\n`;
-                dxf += `0\nLINE\n8\nCOLUMNS\n10\n${pts[1].x}\n20\n${-pts[1].y}\n30\n0.0\n11\n${pts[3].x}\n21\n${-pts[3].y}\n31\n0.0\n`;
-            }
-        }
-
-        // Stairs
-        if (projectState.stairManager) {
-            for (const s of projectState.stairManager.stairs) {
-                const b = s.getBounds();
-                const pts = [
-                    { x: b.x, y: b.y },
-                    { x: b.x + b.width, y: b.y },
-                    { x: b.x + b.width, y: b.y + b.height },
-                    { x: b.x, y: b.y + b.height }
-                ];
-                for (let i = 0; i < 4; i++) {
-                    const p1 = pts[i];
-                    const p2 = pts[(i + 1) % 4];
-                    dxf += `0\nLINE\n8\nSTAIRS\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-                }
-            }
-        }
-
-        // Plot
-        if (projectState.plotManager && projectState.plotManager.plot) {
-            const v = projectState.plotManager.plot.vertices;
-            for (let i = 0; i < v.length; i++) {
-                const p1 = v[i];
-                const p2 = v[(i + 1) % v.length];
-                dxf += `0\nLINE\n8\nPLOT\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-            }
-        }
-
-        // Walls
-        if (projectState.wallManager) {
-            for (const wall of projectState.wallManager.walls) {
-                const layer = wall.type === 'exterior' ? 'WALLS_EXTERIOR' : (wall.type === 'compound' ? 'WALLS_COMPOUND' : 'WALLS_INTERIOR');
-                // Centerline
-                dxf += `0\nLINE\n8\n${layer}\n10\n${wall.start.x}\n20\n${-wall.start.y}\n30\n0.0\n11\n${wall.end.x}\n21\n${-wall.end.y}\n31\n0.0\n`;
-            }
-        }
-
-        // Openings (Doors / Windows / Gates)
-        if (projectState.openingManager && projectState.wallManager) {
-            for (const op of projectState.openingManager.openings) {
-                const wall = projectState.wallManager.getWallById(op.wallId);
-                if (!wall) continue;
-                const geom = op.getGeometry(wall);
-                if (!geom) continue;
-                const layer = op.type === 'gate' ? 'GATES' : (op.type === 'door' ? 'DOORS' : 'WINDOWS');
-                dxf += `0\nLINE\n8\n${layer}\n10\n${geom.center.x - op.width / 2}\n20\n${-geom.center.y}\n30\n0.0\n11\n${geom.center.x + op.width / 2}\n21\n${-geom.center.y}\n31\n0.0\n`;
-            }
-        }
-
-        // Furniture & Landscape
-        if (projectState.furnitureManager && projectState.furnitureManager.items) {
-            const landscapeTypes = ['tree_deciduous', 'tree_palm', 'shrub_bush', 'planter_box', 'lawn_patch', 'driveway_pavers', 'car_suv', 'motorcycle'];
-            for (const item of projectState.furnitureManager.items) {
-                const layer = landscapeTypes.includes(item.type) ? 'LANDSCAPE' : 'FURNITURE';
-                const b = item.getBounds ? item.getBounds() : { x: item.x - (item.width || 24)/2, y: item.y - (item.height || 24)/2, width: item.width || 24, height: item.height || 24 };
-                const pts = [
-                    { x: b.x, y: b.y },
-                    { x: b.x + b.width, y: b.y },
-                    { x: b.x + b.width, y: b.y + b.height },
-                    { x: b.x, y: b.y + b.height }
-                ];
-                for (let i = 0; i < 4; i++) {
-                    const p1 = pts[i];
-                    const p2 = pts[(i + 1) % 4];
-                    dxf += `0\nLINE\n8\n${layer}\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-                }
-            }
-        }
-
-        // Dimensions
-        if (projectState.dimensionManager) {
-            for (const dim of projectState.dimensionManager.dimensions) {
-                const geom = dim.getGeometry();
-                if (geom) {
-                    dxf += `0\nLINE\n8\nDIMENSIONS\n10\n${geom.p1.x}\n20\n${-geom.p1.y}\n30\n0.0\n11\n${geom.p2.x}\n21\n${-geom.p2.y}\n31\n0.0\n`;
-                }
-            }
-        }
-
-        // Roof Slab Projection
-        const slabMgrDXF = projectState.slabManager;
-        if (slabMgrDXF && slabMgrDXF.enabled) {
-            const poly = slabMgrDXF.getSlabPolygon(projectState.wallManager, projectState.plotManager);
-            if (poly && poly.length >= 3) {
-                for (let i = 0; i < poly.length; i++) {
-                    const p1 = poly[i];
-                    const p2 = poly[(i + 1) % poly.length];
-                    dxf += `0\nLINE\n8\nSLAB_PROJECTION\n10\n${p1.x}\n20\n${-p1.y}\n30\n0.0\n11\n${p2.x}\n21\n${-p2.y}\n31\n0.0\n`;
-                }
-            }
-        }
-
-        // End Entities & File
-        dxf += '0\nENDSEC\n0\nEOF\n';
-
-        const blob = new Blob([dxf], { type: 'application/dxf' });
+        const blob = new Blob([buildDXF(projectState)], { type: 'application/dxf' });
         this.triggerDownload(blob, filename);
     }
 
@@ -656,7 +560,7 @@ export class Exporter {
         }
 
         if (projectState.wallManager && projectState.wallManager.walls) {
-            for (const w of projectState.wallManager.walls) {
+            for (const w of shownIn(projectState, projectState.wallManager.walls, 'wall')) {
                 minX = Math.min(minX, w.start.x, w.end.x);
                 minY = Math.min(minY, w.start.y, w.end.y);
                 maxX = Math.max(maxX, w.start.x, w.end.x);
@@ -665,8 +569,21 @@ export class Exporter {
             }
         }
 
+        // annotation (text notes, leaders, angular dimensions) must be inside the exported area too
+        if (projectState.annotationManager) {
+            const am = projectState.annotationManager;
+            for (const [list, cat] of [[am.texts, 'text'], [am.leaders, 'leader'], [am.angdims, 'angdim']]) {
+                for (const a of shownIn(projectState, list, cat)) {
+                    const b = a.getBounds();
+                    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+                    maxX = Math.max(maxX, b.x + b.width); maxY = Math.max(maxY, b.y + b.height);
+                    hasElements = true;
+                }
+            }
+        }
+
         if (projectState.columnManager && projectState.columnManager.columns) {
-            for (const c of projectState.columnManager.columns) {
+            for (const c of shownIn(projectState, projectState.columnManager.columns, 'column')) {
                 const b = c.getBounds();
                 minX = Math.min(minX, b.x);
                 minY = Math.min(minY, b.y);
@@ -677,7 +594,7 @@ export class Exporter {
         }
 
         if (projectState.roomManager && projectState.roomManager.rooms) {
-            for (const r of projectState.roomManager.rooms) {
+            for (const r of shownIn(projectState, projectState.roomManager.rooms, 'room')) {
                 const b = r.getBounds();
                 minX = Math.min(minX, b.x);
                 minY = Math.min(minY, b.y);
@@ -688,7 +605,7 @@ export class Exporter {
         }
 
         if (projectState.stairManager && projectState.stairManager.stairs) {
-            for (const s of projectState.stairManager.stairs) {
+            for (const s of shownIn(projectState, projectState.stairManager.stairs, 'stair')) {
                 const b = s.getBounds();
                 minX = Math.min(minX, b.x);
                 minY = Math.min(minY, b.y);
@@ -715,7 +632,7 @@ export class Exporter {
         }
 
         if (projectState.furnitureManager && projectState.furnitureManager.items) {
-            for (const f of projectState.furnitureManager.items) {
+            for (const f of shownIn(projectState, projectState.furnitureManager.items, 'furniture')) {
                 const b = f.getBounds ? f.getBounds() : { x: f.x - (f.width || 24) / 2, y: f.y - (f.height || 24) / 2, width: f.width || 24, height: f.height || 24 };
                 minX = Math.min(minX, b.x);
                 minY = Math.min(minY, b.y);

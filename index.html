@@ -34,6 +34,13 @@
                 <!-- Grid and Snapping -->
                 <button class="nav-btn active" id="snapGridBtn" title="Toggle Grid Snapping">🧲 <span class="btn-text">Snap: ON</span></button>
                 <button class="nav-btn" id="orthoBtn" title="Ortho Mode: Lock 90° & 45° Angles (Hold Shift)">📐 <span class="btn-text">Ortho: OFF</span></button>
+                <button class="nav-btn" id="polarBtn" title="Polar tracking: the drawing direction snaps to steps such as 30° or 45° when you are close to one">⟲ <span class="btn-text">Polar: OFF</span></button>
+                <button class="nav-btn active" id="osnapBtn" title="Object snaps: endpoint, midpoint, intersection, perpendicular, nearest">⌖ <span class="btn-text">Snaps</span></button>
+                <button class="nav-btn" id="underlayBtn" title="Trace image: load a scanned plan or sketch (an underlay) to draw over, and set its scale">&#128444; <span class="btn-text">Trace image</span></button>
+                <button class="nav-btn" id="toolsBtn" title="Tools: annotate, measure, edit walls, floor finishes, blocks, import and print at scale">&#128295; <span class="btn-text">Tools &#9662;</span></button>
+                <button class="nav-btn" id="schedulesBtn" title="Door / window and room schedules (CSV export)">&#9638; <span class="btn-text">Schedules</span></button>
+                <button class="nav-btn" id="layersBtn" title="Layers: show, hide, lock and colour groups of objects">&#9636; <span class="btn-text">Layers</span></button>
+                <button class="nav-btn active" id="cornerStyleBtn" title="Wall corners: Mitred (sharp, architectural) or Rounded (original look)">⌐ <span class="btn-text">Corners: Mitred</span></button>
 
                 <span class="nav-separator" style="color: var(--border-color);">|</span>
 
@@ -411,6 +418,21 @@
         </div>
 
         <!-- Main Module Script -->
+        <script>
+            // ES modules are blocked by browsers when a page is opened straight from disk
+            // (file://), which would leave a blank, dead app. Explain what to do instead.
+            if (location.protocol === 'file:') {
+                var warn = document.createElement('div');
+                warn.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#0b1220;color:#e2e8f0;' +
+                    'display:flex;align-items:center;justify-content:center;padding:24px;font:16px/1.6 system-ui,sans-serif;text-align:center;';
+                warn.innerHTML = '<div style="max-width:560px"><h2 style="color:#38bdf8;margin:0 0 12px">Start the app with a local server</h2>' +
+                    '<p>Browsers block JavaScript modules on pages opened directly from disk, so HousePlanner CAD cannot run from <code>file://</code>.</p>' +
+                    '<p>Open a terminal in this folder and run:</p>' +
+                    '<p><code style="background:#1e293b;padding:6px 12px;border-radius:6px">python run.py</code></p>' +
+                    '<p style="opacity:.7">It starts a local server and opens the app in your browser.</p></div>';
+                document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(warn); });
+            }
+        </script>
         <script type="module" src="app.js"></script>
     </body>
 </html>

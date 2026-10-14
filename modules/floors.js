@@ -10,6 +10,8 @@ import { Room } from './rooms.js';
 import { Opening } from './openings.js';
 import { Stair } from './stairs.js';
 import { DimensionLine } from './dimensions.js';
+import { serializeEntities, restoreEntities } from './serializer.js';
+import { TextNote, Leader, AngularDim } from './annotations.js';
 
 export class Floor {
     constructor(id, name, level = 0) {
@@ -23,6 +25,10 @@ export class Floor {
         this.furniture = [];
         this.stairs = [];
         this.dimensions = [];
+        this.texts = [];
+        this.leaders = [];
+        this.angdims = [];
+        this.slabConfig = null;
     }
 
     /**
@@ -124,6 +130,20 @@ export class FloorManager {
         this.floorSpacing = 180; // 15 feet horizontal gap between side-by-side floors in inches
     }
 
+    /** Back to a blank 3-floor set-up (used when a new / single-floor project is opened). */
+    reset() {
+        this.floors = [
+            new Floor('ground', 'Ground Floor Plan', 0),
+            new Floor('first', 'First Floor Plan', 1),
+            new Floor('terrace', 'Terrace Plan', 2)
+        ];
+        this.activeFloorId = 'ground';
+        this.viewMode = 'active';
+        this.showGhost = true;
+        this.floorSpacing = 180;
+        this.updateFloorSwitcherUI();
+    }
+
     getActiveFloor() {
         return this.floors.find(f => f.id === this.activeFloorId) || this.floors[0];
     }
@@ -162,61 +182,15 @@ export class FloorManager {
     }
 
     /**
-     * Snapshot the active CAD manager state into the currently active Floor object
+     * Snapshot the active CAD manager state into the currently active Floor object.
+     * Uses the shared serializer so a floor keeps exactly the same data as a project.
      */
     saveCurrentFloorState() {
         const floor = this.getActiveFloor();
         if (!floor) return;
 
-        floor.walls = this.app.wallManager.walls.map(w => ({
-            id: w.id, start: { ...w.start }, end: { ...w.end },
-            thickness: w.thickness, type: w.type
-        }));
-
-        floor.openings = this.app.openingManager.openings.map(o => ({
-            id: o.id, wallId: o.wallId, t: o.t, type: o.type,
-            subtype: o.subtype, width: o.width, flipHinge: o.flipHinge,
-            flipSwing: o.flipSwing, label: o.label,
-            showLabel: o.showLabel, showMeasurement: o.showMeasurement
-        }));
-
-        floor.rooms = this.app.roomManager.rooms.map(r => ({
-            id: r.id, x: r.x, y: r.y, name: r.name,
-            width: r.width, height: r.height, color: r.color,
-            labelScale: r.labelScale, showDimensions: r.showDimensions, showArea: r.showArea,
-            rotation: r.rotation || 0, tagStyle: r.tagStyle || 'clean',
-            isDoubleHeight: !!r.isDoubleHeight, ceilingHeight: r.ceilingHeight || 240,
-            isVoid: !!r.isVoid, voidType: r.voidType || 'open_to_below',
-            dottedSlabLine: !!r.dottedSlabLine, slabOffset: r.slabOffset !== undefined ? r.slabOffset : 0,
-            slabLinePattern: r.slabLinePattern || 'dashed', slabLabel: r.slabLabel || '',
-            dottedCutoutPerimeter: !!r.dottedCutoutPerimeter
-        }));
-
-        floor.columns = this.app.columnManager.columns.map(c => ({
-            id: c.id, x: c.x, y: c.y, width: c.width, depth: c.depth,
-            rotation: c.rotation || 0, name: c.name, showLabel: c.showLabel || false
-        }));
-
-        floor.furniture = this.app.furnitureManager.items.map(f => ({
-            id: f.id, typeId: f.typeId, x: f.x, y: f.y,
-            width: f.width, height: f.height, rotation: f.rotation
-        }));
-
-        floor.stairs = (this.app.stairManager && this.app.stairManager.stairs)
-            ? this.app.stairManager.stairs.map(s => s.serialize ? s.serialize() : { ...s })
-            : [];
-
-        floor.dimensions = this.app.dimensionManager.dimensions.map(d => ({
-            id: d.id,
-            start: d.start ? { ...d.start } : (d.p1 ? { ...d.p1 } : { x: 0, y: 0 }),
-            end: d.end ? { ...d.end } : (d.p2 ? { ...d.p2 } : { x: 0, y: 0 }),
-            offset: d.offset,
-            customText: d.customText || d.text
-        }));
-
-        if (this.app.slabManager) {
-            floor.slabConfig = this.app.slabManager.serialize();
-        }
+        Object.assign(floor, serializeEntities(this.app));
+        floor.slabConfig = this.app.slabManager ? this.app.slabManager.serialize() : null;
     }
 
     /**
@@ -228,86 +202,12 @@ export class FloorManager {
 
         this.app.clearSelection();
 
-        // Walls
-        this.app.wallManager.walls = [];
-        for (const w of floor.walls) {
-            const wall = this.app.wallManager.addWall(w.start, w.end, w.thickness, w.type);
-            if (wall) wall.id = w.id;
-        }
-
-        // Openings
-        this.app.openingManager.openings = [];
-        for (const o of floor.openings) {
-            const op = this.app.openingManager.addOpening(o.wallId, o.t, o);
-            if (op) op.id = o.id;
-        }
-
-        // Rooms
-        this.app.roomManager.rooms = [];
-        for (const r of floor.rooms) {
-            const room = this.app.roomManager.addRoom(r.x, r.y, r);
-            if (room) {
-                room.id = r.id;
-                room.rotation = r.rotation || 0;
-                room.tagStyle = r.tagStyle || 'clean';
-                room.isDoubleHeight = !!r.isDoubleHeight;
-                room.ceilingHeight = r.ceilingHeight || 240;
-                room.isVoid = !!r.isVoid;
-                room.voidType = r.voidType || 'open_to_below';
-                room.dottedSlabLine = !!r.dottedSlabLine;
-                room.slabOffset = r.slabOffset !== undefined ? r.slabOffset : 0;
-                room.slabLinePattern = r.slabLinePattern || 'dashed';
-                room.slabLabel = r.slabLabel || '';
-                room.dottedCutoutPerimeter = !!r.dottedCutoutPerimeter;
-            }
-        }
-
-        // Columns
-        this.app.columnManager.columns = [];
-        for (const c of floor.columns) {
-            const col = this.app.columnManager.addColumn(c.x, c.y, c);
-            if (col) {
-                col.id = c.id;
-                col.name = c.name;
-                col.showLabel = c.showLabel || false;
-            }
-        }
-
-        // Furniture
-        this.app.furnitureManager.items = [];
-        for (const f of floor.furniture) {
-            const item = this.app.furnitureManager.addItem(f.typeId, f.x, f.y, f.rotation);
-            if (item) {
-                item.id = f.id;
-                item.width = f.width;
-                item.height = f.height;
-            }
-        }
-
-        // Stairs
-        if (this.app.stairManager) {
-            this.app.stairManager.stairs = [];
-            for (const s of floor.stairs) {
-                if (typeof this.app.stairManager.addStair === 'function') {
-                    this.app.stairManager.addStair(s);
-                }
-            }
-        }
-
-        // Dimensions
-        this.app.dimensionManager.dimensions = [];
-        for (const d of floor.dimensions) {
-            const startPt = d.start || d.p1;
-            const endPt = d.end || d.p2;
-            if (startPt && endPt && typeof startPt.x === 'number' && typeof endPt.x === 'number') {
-                const dim = this.app.dimensionManager.addDimension(startPt, endPt, d.offset, d.customText || d.text);
-                if (dim) dim.id = d.id;
-            }
-        }
+        const warnings = restoreEntities(this.app, floor);
+        if (warnings.length) console.warn(`Floor "${floorId}" restored with warnings:`, warnings);
 
         // Slab Configuration
         if (floor.slabConfig && this.app.slabManager) {
-            this.app.slabManager.deserialize(floor.slabConfig);
+            this.app.slabManager.deserialize(JSON.parse(JSON.stringify(floor.slabConfig)));
             if (this.app.plotManager) {
                 this.app.plotManager.showSlabProjection = this.app.slabManager.enabled;
                 this.app.plotManager.slabProjectionOffset = this.app.slabManager.uniformOffset;
@@ -437,11 +337,14 @@ export class FloorManager {
             id: `wall_f_${i + 1}`
         }));
 
-        // 3. For any Ground Floor room with double height ceiling, automatically create an 'OPEN TO BELOW' void
+        // 3. For any Ground Floor room with double height ceiling, automatically create an 'OPEN TO BELOW' void.
+        //    Voids made by an earlier "Copy Structure" are replaced, not stacked on top of each other.
+        tgt.rooms = tgt.rooms.filter(r => !(typeof r.id === 'string' && r.id.startsWith('room_void_')));
+        let voidSeq = 0;
         for (const rm of src.rooms) {
             if (rm.isDoubleHeight) {
                 tgt.rooms.push({
-                    id: `room_void_${Date.now()}`,
+                    id: `room_void_${Date.now()}_${++voidSeq}`,
                     x: rm.x,
                     y: rm.y,
                     name: 'Open to Below',
@@ -552,6 +455,23 @@ export class FloorManager {
     }
 
     /**
+     * Turn saved floor data into real objects ONCE per data array, instead of rebuilding them on
+     * every redraw (which also burned an id per object per frame). The cache is keyed on the array
+     * itself and its length, so replacing the array (every save/restore does) or pushing to it
+     * invalidates it.
+     */
+    _hydrated(list, build) {
+        if (!list) return [];
+        if (!this._hydrationCache) this._hydrationCache = new WeakMap();
+        let hit = this._hydrationCache.get(list);
+        if (!hit || hit.len !== list.length) {
+            hit = { len: list.length, items: list.map(build) };
+            this._hydrationCache.set(list, hit);
+        }
+        return hit.items;
+    }
+
+    /**
      * Render a floor instance with a translation offset
      */
     renderSingleFloorInstance(ctx, floor, offset, scale, isExport, style) {
@@ -569,25 +489,22 @@ export class FloorManager {
         const isClean = style === 'clean';
 
         // 1. Rooms
-        for (const r of floor.rooms) {
-            const roomObj = (r instanceof Room) ? r : Object.assign(new Room(r.x, r.y, r), r);
+        for (const roomObj of this._hydrated(floor.rooms, r => (r instanceof Room) ? r : Object.assign(new Room(r.x, r.y, r), r))) {
             this.app.roomManager.renderSingleRoom(ctx, roomObj, scale, false, isExport, style);
         }
 
         // 2. Walls
-        for (const w of floor.walls) {
-            const wallObj = (w instanceof Wall) ? w : Object.assign(new Wall(w.start, w.end, w.thickness, w.type), w);
-            this.app.wallManager.renderSingleWall(ctx, wallObj, scale, false, null, style);
+        const wallObjs = this._hydrated(floor.walls, w => (w instanceof Wall) ? w : Object.assign(new Wall(w.start, w.end, w.thickness, w.type), w));
+        const joins = this.app.wallManager.getJoinedPolygons(wallObjs);
+        for (const wallObj of wallObjs) {
+            this.app.wallManager.renderSingleWall(ctx, wallObj, scale, false, null, style, joins);
         }
 
         // 3. Openings (Doors, Windows, and Gates)
-        for (const o of floor.openings) {
-            const wall = floor.walls.find(w => w.id === o.wallId);
-            if (wall) {
-                const wallObj = (wall instanceof Wall) ? wall : Object.assign(new Wall(wall.start, wall.end, wall.thickness, wall.type), wall);
-                const openObj = (o instanceof Opening) ? o : Object.assign(new Opening(o.wallId, o.t, o), o);
-                this.app.openingManager.renderSingleOpening(ctx, openObj, wallObj, scale, false);
-            }
+        const wallById = new Map(wallObjs.map(w => [w.id, w]));
+        for (const openObj of this._hydrated(floor.openings, o => (o instanceof Opening) ? o : Object.assign(new Opening(o.wallId, o.t, o), o))) {
+            const wallObj = wallById.get(openObj.wallId);
+            if (wallObj) this.app.openingManager.renderSingleOpening(ctx, openObj, wallObj, scale, false);
         }
 
         // 4. Columns
@@ -602,18 +519,27 @@ export class FloorManager {
 
         // 6. Stairs
         if (floor.stairs && floor.stairs.length > 0) {
-            for (const s of floor.stairs) {
-                const stairObj = (s instanceof Stair) ? s : new Stair(s);
+            for (const stairObj of this._hydrated(floor.stairs, s => (s instanceof Stair) ? s : new Stair(s))) {
                 stairObj.render(ctx, scale, false);
             }
         }
 
+        // 6b. Annotation (text notes, leaders, angular dimensions)
+        const ann = this.app.annotationManager;
+        if (ann) {
+            for (const t of this._hydrated(floor.texts, r => (r instanceof TextNote) ? r : Object.assign(new TextNote(r.x, r.y, r), r))) ann.renderText(ctx, t, scale, false, isClean);
+            for (const l of this._hydrated(floor.leaders, r => (r instanceof Leader) ? r : Object.assign(new Leader(r.points, r), r))) ann.renderLeader(ctx, l, scale, false, isClean);
+            for (const d of this._hydrated(floor.angdims, r => (r instanceof AngularDim) ? r : Object.assign(new AngularDim(r.vertex, r.p1, r.p2, r), r))) ann.renderAngular(ctx, d, scale, false, isClean, isExport);
+        }
+
         // 7. Dimensions
         if (floor.dimensions && floor.dimensions.length > 0 && this.app.dimensionManager) {
-            for (const d of floor.dimensions) {
+            const dimObjs = this._hydrated(floor.dimensions, d => {
                 const startPt = d.start || d.p1 || { x: 0, y: 0 };
                 const endPt = d.end || d.p2 || { x: 0, y: 0 };
-                const dimObj = (d instanceof DimensionLine) ? d : Object.assign(new DimensionLine(startPt, endPt, d.offset, d.customText || d.text), d);
+                return (d instanceof DimensionLine) ? d : Object.assign(new DimensionLine(startPt, endPt, d.offset, d.customText || d.text), d);
+            });
+            for (const dimObj of dimObjs) {
                 this.app.dimensionManager.renderSingleDimension(ctx, dimObj, scale, false, isExport, style);
             }
         }
@@ -694,7 +620,11 @@ export class FloorManager {
                 columns: f.columns,
                 furniture: f.furniture,
                 stairs: f.stairs,
-                dimensions: f.dimensions
+                dimensions: f.dimensions,
+                texts: f.texts || [],
+                leaders: f.leaders || [],
+                angdims: f.angdims || [],
+                slabConfig: f.slabConfig || null
             }))
         };
     }
@@ -718,6 +648,10 @@ export class FloorManager {
                     fl.furniture = df.furniture || [];
                     fl.stairs = df.stairs || [];
                     fl.dimensions = df.dimensions || [];
+                    fl.texts = df.texts || [];
+                    fl.leaders = df.leaders || [];
+                    fl.angdims = df.angdims || [];
+                    fl.slabConfig = df.slabConfig || null;
                 }
             });
         }

@@ -3,8 +3,10 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { nextId } from './ids.js';
 
-let fixtureIdCounter = 1;
+
 
 export const FURNITURE_CATALOG = [
     // Bedroom
@@ -55,7 +57,7 @@ export const FURNITURE_CATALOG = [
 
 export class FurnitureItem {
     constructor(typeId, x, y, options = {}) {
-        this.id = `fit_${fixtureIdCounter++}`;
+        this.id = nextId('fit');
         this.typeId = typeId;
         this.type = typeId; // Alias for uniform element identification
         const meta = FURNITURE_CATALOG.find(c => c.id === typeId) || {
@@ -69,13 +71,13 @@ export class FurnitureItem {
         this.rotation = options.rotation || 0; // degrees
     }
 
+    /** Axis-aligned bounding box of the (possibly rotated) item. */
     getBounds() {
-        return {
-            x: this.x - this.width / 2,
-            y: this.y - this.height / 2,
-            width: this.width,
-            height: this.height
-        };
+        const rad = (this.rotation * Math.PI) / 180;
+        const c = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+        const w = this.width * c + this.height * s;
+        const h = this.width * s + this.height * c;
+        return { x: this.x - w / 2, y: this.y - h / 2, width: w, height: h };
     }
 
     toLocal(px, py) {
@@ -169,7 +171,7 @@ export class FurnitureManager {
     }
 
     addItem(typeId, x, y, rotation = 0) {
-        const item = new FurnitureItem(typeId, x, y, { rotation });
+        const item = stampLayer(this.layers, new FurnitureItem(typeId, x, y, { rotation }));
         this.items.push(item);
         return item;
     }
@@ -191,12 +193,13 @@ export class FurnitureManager {
     rotateItem(id, deg = 90) {
         const item = this.getItemById(id);
         if (item) {
-            item.rotation = (item.rotation + deg) % 360;
+            item.rotation = (((item.rotation + deg) % 360) + 360) % 360;
         }
     }
 
     render(ctx, scale) {
         for (const item of this.items) {
+            if (!visibleIn(this.layers, item, 'furniture')) continue;
             const isSelected = item.id === this.selectedItemId;
             this.renderSingleItem(ctx, item, scale, isSelected);
         }
@@ -660,6 +663,26 @@ export class FurnitureManager {
                 ctx.arc(0, -halfH + 5, 2, 0, Math.PI * 2);
                 ctx.fillStyle = '#38bdf8';
                 ctx.fill();
+                break;
+            }
+
+            case 'fridge': {
+                // Cabinet body
+                ctx.fillRect(-halfW, -halfH, item.width, item.height);
+                ctx.strokeRect(-halfW, -halfH, item.width, item.height);
+
+                // Door panel inset (front edge is the bottom of the symbol)
+                const inset = Math.min(2, item.width * 0.06);
+                ctx.strokeRect(-halfW + inset, -halfH + inset, item.width - inset * 2, item.height - inset * 2);
+
+                // Freezer / fresh-food split line and door handles
+                ctx.beginPath();
+                ctx.moveTo(0, -halfH + inset);
+                ctx.lineTo(0, halfH - inset);
+                ctx.stroke();
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillRect(-3, halfH - inset - 3, 1.5, 3);      // door grips on the front edge
+                ctx.fillRect(1.5, halfH - inset - 3, 1.5, 3);
                 break;
             }
 
@@ -1142,7 +1165,7 @@ export class FurnitureManager {
 
     getItemAt(x, y) {
         for (let i = this.items.length - 1; i >= 0; i--) {
-            if (this.items[i].hitTest(x, y)) {
+            if (selectableIn(this.layers, this.items[i], 'furniture') && this.items[i].hitTest(x, y)) {
                 return this.items[i];
             }
         }

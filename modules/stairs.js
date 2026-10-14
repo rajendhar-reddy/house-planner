@@ -3,8 +3,10 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { nextId } from './ids.js';
 
-let stairIdCounter = 1;
+
 
 export const STAIR_PRESETS = [
     {
@@ -79,7 +81,7 @@ export const STAIR_PRESETS = [
 
 export class Stair {
     constructor(options = {}) {
-        this.id = `stair_${stairIdCounter++}`;
+        this.id = nextId('stair');
         this.x = options.x || 0;
         this.y = options.y || 0;
         this.type = options.type || 'dogleg'; // 'dogleg' | 'straight' | 'l_shape' | 'spiral' | 'open_well'
@@ -127,6 +129,36 @@ export class Stair {
             return { width: diameter, height: diameter };
         }
         return { width: 72, height: 120 };
+    }
+
+    /**
+     * How many treads the plan actually shows, and the matching number of rises
+     * (rises = treads + 1: the upper floor acts as the last tread).
+     * The "Total Steps" input counts RISES for straight stairs, but the other layouts can only split
+     * the steps into whole flights, so what is drawn can differ from the typed number by one.
+     */
+    getTreadSummary() {
+        let treads;
+        if (this.type === 'straight') {
+            treads = Math.max(0, this.treads - 1);
+        } else if (this.type === 'dogleg' || this.type === 'dogleg_wide') {
+            const landing = this.landingSteps || 0;
+            treads = Math.max(1, Math.floor((this.treads - landing) / 2)) * 2 + landing;
+        } else if (this.type === 'open_well') {
+            const mid = this.middleTreads || 3;
+            treads = Math.max(1, Math.floor((this.treads - mid) / 2)) * 2 + mid;
+        } else if (this.type === 'l_shape') {
+            treads = Math.max(1, Math.floor((this.treads - 2) / 2)) * 2 + 2;
+        } else {
+            treads = this.treads;                       // spiral: one wedge per tread
+        }
+        return { treads, rises: treads + 1 };
+    }
+
+    /** Text used on drawings, e.g. "16 RISES / 15 TREADS". */
+    getCountLabel() {
+        const { treads, rises } = this.getTreadSummary();
+        return `${rises} RISES / ${treads} TREADS`;
     }
 
     /**
@@ -831,7 +863,7 @@ export class StairManager {
     }
 
     addStair(options = {}) {
-        const stair = new Stair(options);
+        const stair = stampLayer(this.layers, new Stair(options));
         this.stairs.push(stair);
         return stair;
     }
@@ -847,7 +879,7 @@ export class StairManager {
 
     hitTest(px, py) {
         for (let i = this.stairs.length - 1; i >= 0; i--) {
-            if (this.stairs[i].hitTest(px, py)) {
+            if (selectableIn(this.layers, this.stairs[i], 'stair') && this.stairs[i].hitTest(px, py)) {
                 return this.stairs[i];
             }
         }
@@ -868,6 +900,7 @@ export class StairManager {
 
     render(ctx, scale) {
         for (const stair of this.stairs) {
+            if (!visibleIn(this.layers, stair, 'stair')) continue;
             stair.render(ctx, scale, stair.id === this.selectedStairId);
         }
     }

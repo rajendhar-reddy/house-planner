@@ -3,12 +3,14 @@
  */
 
 import { units } from './units.js';
+import { visibleIn, selectableIn, stampLayer } from './layers.js';
+import { nextId } from './ids.js';
 
-let openingIdCounter = 1;
+
 
 export class Opening {
     constructor(wallId, t, options = {}) {
-        this.id = `op_${openingIdCounter++}`;
+        this.id = nextId('op');
         this.wallId = wallId;
         this.t = Math.max(0.05, Math.min(0.95, t)); // ratio along wall
         this.type = options.type || 'door'; // 'door' | 'window' | 'gate'
@@ -52,9 +54,31 @@ export class OpeningManager {
     }
 
     addOpening(wallId, t, options = {}) {
-        const op = new Opening(wallId, t, options);
+        const op = stampLayer(this.layers, new Opening(wallId, t, options));
         this.openings.push(op);
         return op;
+    }
+
+    /**
+     * Check whether an opening of `width` fits on `wall` at ratio `t`.
+     * Keeps MIN_JAMB inches of wall at each end and refuses to overlap another opening.
+     * @returns {{ok: boolean, t?: number, reason?: string}}  `t` is the position nudged to fit.
+     */
+    checkPlacement(wall, t, width, ignoreId = null) {
+        const MIN_JAMB = 3;
+        const len = wall.getLength();
+        if (width > len - MIN_JAMB * 2) {
+            return { ok: false, reason: `This wall is too short for a ${units.formatLength(width)} opening.` };
+        }
+        const half = width / 2;
+        const fitted = Math.max((half + MIN_JAMB) / len, Math.min(1 - (half + MIN_JAMB) / len, t));
+        for (const o of this.openings) {
+            if (o.wallId !== wall.id || o.id === ignoreId) continue;
+            if (Math.abs(o.t - fitted) * len < (o.width + width) / 2) {
+                return { ok: false, reason: 'That spot is already taken by another door/window.' };
+            }
+        }
+        return { ok: true, t: fitted };
     }
 
     removeOpening(id) {
@@ -84,10 +108,14 @@ export class OpeningManager {
     /**
      * Render all doors and windows
      */
-    render(ctx, scale, wallManager) {
+    render(ctx, scale, wallManager, style = 'blueprint') {
+        // Openings are "cut" by painting the background colour over the wall, so the colour
+        // must match the theme (white paper for the clean theme, dark canvas for blueprint).
+        this.cutoutColor = (style === 'clean') ? '#ffffff' : '#0f172a';
         for (const op of this.openings) {
             const wall = wallManager.getWallById(op.wallId);
             if (!wall) continue;
+            if (!visibleIn(this.layers, op, 'opening') || !visibleIn(wallManager.layers, wall, 'wall')) continue;
 
             const isSelected = op.id === this.selectedOpeningId;
             this.renderSingleOpening(ctx, op, wall, scale, isSelected);
@@ -126,7 +154,7 @@ export class OpeningManager {
         const halfT = wallThickness / 2;
 
         // 1. Clear Wall Opening Cutout
-        ctx.fillStyle = '#0f172a'; // canvas background color (mask wall)
+        ctx.fillStyle = this.cutoutColor || '#0f172a'; // theme background colour (masks the wall)
         ctx.fillRect(-halfW, -halfT - 1 / scale, door.width, wallThickness + 2 / scale);
 
         // 2. Door Jambs (frames on each side)
@@ -320,7 +348,7 @@ export class OpeningManager {
         const pillarSize = Math.max(16, wallThickness * 1.8); // 16"-18" standard Indian compound wall gate pier
 
         // 1. Clear wall cutout
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = this.cutoutColor || '#0f172a';
         ctx.fillRect(-halfW, -halfT - 1 / scale, gate.width, wallThickness + 2 / scale);
 
         // 2. Gate Piers on each side (Solid RCC / Masonry Piers with Pyramid Coping)
@@ -465,7 +493,7 @@ export class OpeningManager {
         const halfT = wallThickness / 2;
 
         // 1. Clear Wall Opening Cutout
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = this.cutoutColor || '#0f172a';
         ctx.fillRect(-halfW, -halfT - 1 / scale, win.width, wallThickness + 2 / scale);
 
         // 2. Window Sill (outer lines representing masonry opening and sill projection)
@@ -548,6 +576,7 @@ export class OpeningManager {
             const op = this.openings[i];
             const wall = wallManager.getWallById(op.wallId);
             if (!wall) continue;
+            if (!selectableIn(this.layers, op, 'opening') || !visibleIn(wallManager.layers, wall, 'wall')) continue;
 
             const geom = op.getGeometry(wall);
             if (!geom) continue;
